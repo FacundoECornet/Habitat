@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# pre-commit — fail-closed staged-secret gate for ordinary commits (D-09/D-11/D-12)
+#
+# What it does:
+#   Scans the STAGED INDEX blobs (not the working tree) for five secret-signature
+#   classes. On any match it aborts the ordinary `git commit` and reports only the
+#   violated rule name, the staged path, and the line number. It never prints the
+#   matched bytes.
+#
+# Fail-closed policy:
+#   grep status 0 means a match (block); status 1 alone means clean; any other
+#   status, a Git error, or an unreadable blob blocks with a named scan-failed
+#   reason.
+#
+# Bypass limitation:
+#   `git commit --no-verify` bypasses this hook by design (native Git behavior).
+#   This hook is a normal-workflow backstop, NOT a security boundary against
+#   deliberate bypass. The installer never claims otherwise.
+#
+# NOTE: `set -e` is deliberately omitted — grep exit statuses are handled
+# explicitly. Only `set -u` and `set -o pipefail` are enabled.
+
+set -u
+set -o pipefail
+
+# --- detector expressions assembled from fragments ---------------------------
+# A complete signature is never written as a literal, so this hook does not
+# self-match when its own source is staged.
+F_UND='_'
+F_DASH='-'
+F_APIKEY='apikey'
+F_GH='gh'
+F_OP='[op]'
+F_XOXB='xoxb'
+F_PKB='BEGIN'
+F_PKM=' .*'
+F_PKE='PRIVATE KEY'
+
+R_APIKEY="${F_APIKEY}${F_UND}"
+R_GH="${F_GH}${F_OP}${F_UND}"
+R_SK='sk'"${F_DASH}"
+R_XOXB="${F_XOXB}${F_DASH}"
+R_PK="${F_PKB}${F_PKM}${F_PKE}"
+
+RULE_NAMES=( 'apikey-marker' 'github-token' 'secret-key-prefix' 'slack-token' 'private-key-marker' )
+RULE_ERES=( "${R_APIKEY}" "${R_GH}" "${R_SK}" "${R_XOXB}" "${R_PK}" )
+
+# --- canonical documentation exceptions (exact path AND exact content) -------
+# Only the locked planning docs may carry canonical examples of the signatures,
+# and only on the exact lines below. Whole files or file types are never exempt.
+SIG_GHO="${F_GH}o${F_UND}"
+CANON_D09="- **D-09:** Pre-commit hook is bash grep fail-closed (zero deps); patterns cover \`${R_APIKEY}\`, \`${R_GH}\`, \`${R_SK}\`, \`${R_XOXB}\`, \`${R_PK}\`; aborts on hit with a named reason. No gitleaks binary (breaks no-sudo constraint)."
+CANON_D10="- **D-10:** Secrets denied + \`.example\` templates only — \`jev.env\` values, \`.git-credentials\` (${SIG_GHO} token), \`.claude.json\` IDs never versioned; \`jev.env.example\` carries names only; keys re-entered by hand per PC."
+
+allowlist_check() {
+  local path="$1" text="$2"
+  case "$path" in
+    .planning/phases/01-inventory-exclusions-manifest/01-CONTEXT.md|\
+    .planning/phases/01-inventory-exclusions-manifest/01-RESEARCH.md)
+      ;;
+    *) return 1 ;;
+  esac
+  [ "$text" = "$CANON_D09" ] && return 0
+  [ "$text" = "$CANON_D10" ] && return 0
+  return 1
+}
+
+# --- reporting (rule + path + line only; never matched bytes) ---------------
+blocked=0
+report_block() {
+  printf 'BLOCKED: rule=%s path=%s line=%s\n' "$1" "$2" "$3" >&2
+}
+
+scan_path() {
+  local path="$1" content
+  if ! content="$(git show ":$path" 2>/dev/null)"; then
+    report_block 'scan-failed' "$path" '?'
+    blocked=1
+    return
+  fi
+
+  local i name ere out rc ln lineno text
+  for i in "${!RULE_NAMES[@]}"; do
+    name="${RULE_NAMES[$i]}"
+    ere="${RULE_ERES[$i]}"
+    out="$(printf '%s\n' "$content" | grep -nE -I -- "$ere" 2>/dev/null)"
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+      while IFS= read -r ln; do
+        [ -n "$ln" ] || continue
+        lineno="${ln%%:*}"
+        text="${ln#*:}"
+        if allowlist_check "$path" "$text"; then
+          continue
+        fi
+        report_block "$name" "$path" "$lineno"
+        blocked=1
+      done <<< "$out"
+    elif [ "$rc" -eq 1 ]; then
+      :
+    else
+      report_block 'scan-failed' "$path" '?'
+      blocked=1
+      return
+    fi
+  done
+}
+
+# --- scan every staged blob that will enter the commit ---------------------
+while IFS= read -r staged; do
+  [ -n "$staged" ] || continue
+  scan_path "$staged"
+done < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if [ "$blocked" -ne 0 ]; then
+  printf 'pre-commit: commit blocked by the secret gate (D-09). Bypass: git commit --no-verify.\n' >&2
+  exit 1
+fi
+exit 0
