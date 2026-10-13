@@ -1,0 +1,47 @@
+# .gitignore — Git ignore backstop for MANIFEST.json exclusions (D-07/D-08/D-10/D-14/D-15)
+#
+# Second layer ONLY: the primary structural denylist lives in MANIFEST.json
+# (`excludes` per entry) and is consumed by capture (Phase 2). These rules stop
+# ordinary `git add` of untracked sensitive/generated paths.
+#
+# Recursive `**/` patterns below cover every managed root mirrored under home/.
+# Package manifests and lockfiles stay versioned (`npm ci` rebuilds modules).
+
+# --- secrets & credentials (never versioned) ---
+**/jev.env
+**/.git-credentials
+**/.claude.json
+*.env
+*.pem
+*.key
+**/BEGIN *PRIVATE KEY*
+**/*token*
+**/*secret*
+
+# --- generated / reinstallable (rebuilt by `npm ci`) ---
+**/node_modules/
+**/bin/
+dist/
+build/
+
+# --- archives & backup leftovers (never versioned) ---
+**/*.tar.gz
+**/*.tgz
+**/*.tar
+**/*.zip
+**/*.bak*
+**/*.bak-*
+**/*.backup-*
+**/opencode-backup/
+**/opencode-backup-*.tar.gz
+**/agents.bak-*
+*backup-*
+legacy-archive/
+.opencode-ecosystem-backup/
+
+# --- machine-local (never overwritten by restore, never committed) ---
+**/*.local
+home/.azure
+
+# --- GSD ephemeral ---
+.planning/.gsd-state-tmp/
