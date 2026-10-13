@@ -42,6 +42,16 @@ F_MNT='mnt'
 F_C='c'
 F_USERS='Users'
 F_NEVER='[^[:space:]/]+'
+# Fragments for the fixed GSD execution-context reference lines (see allowlist).
+F_AT='@'
+F_USER='login'
+F_CFG='.config'
+F_OC='opencode'
+F_GSD='get-shit-done'
+F_WFD='workflows'
+F_EXEC='execute-plan.md'
+F_TPL='templates'
+F_SUM='summary.md'
 
 REEN_HOME="${F_SLASH}${F_HOME}${F_SLASH}${F_NEVER}"
 REEN_WIN="${F_SLASH}${F_MNT}${F_SLASH}${F_C}${F_SLASH}${F_USERS}(/[^[:space:]]*)?"
@@ -56,15 +66,33 @@ H_EXAMPLE="${F_SLASH}${F_HOME}${F_SLASH}<user>"
 W_EXAMPLE="${F_SLASH}${F_MNT}${F_SLASH}${F_C}${F_SLASH}${F_USERS}"
 CANON_D13="- **D-13:** Absolute-path scan is fail-closed: \`grep -rEn\` over versioned files for \`${H_EXAMPLE}\` and \`${W_EXAMPLE}\`; capture aborts on hit; small allowlist for intentional refs only."
 
+# Two fixed GSD execution-context reference lines appear in the immutable,
+# already-completed plan files 01-01 .. 01-07 (the execute-plan workflow and the
+# summary template). They are assembled from fragments so this script never
+# stores a complete machine-bound literal. Exemption requires BOTH the exact
+# plan path and the exact complete line content — whole plan files are never
+# exempt.
+EXEC_REF_WF="${F_AT}${F_SLASH}${F_HOME}${F_SLASH}${F_USER}${F_SLASH}${F_CFG}${F_SLASH}${F_OC}${F_SLASH}${F_GSD}${F_SLASH}${F_WFD}${F_SLASH}${F_EXEC}"
+EXEC_REF_TPL="${F_AT}${F_SLASH}${F_HOME}${F_SLASH}${F_USER}${F_SLASH}${F_CFG}${F_SLASH}${F_OC}${F_SLASH}${F_GSD}${F_SLASH}${F_TPL}${F_SLASH}${F_SUM}"
+
 allowlist_check() {
   local path="$1" text="$2"
   case "$path" in
     .planning/phases/01-inventory-exclusions-manifest/01-CONTEXT.md|\
     .planning/phases/01-inventory-exclusions-manifest/01-RESEARCH.md)
+      [ "$text" = "$CANON_D13" ] && return 0
       ;;
-    *) return 1 ;;
+    .planning/phases/01-inventory-exclusions-manifest/01-01-PLAN.md|\
+    .planning/phases/01-inventory-exclusions-manifest/01-02-PLAN.md|\
+    .planning/phases/01-inventory-exclusions-manifest/01-03-PLAN.md|\
+    .planning/phases/01-inventory-exclusions-manifest/01-04-PLAN.md|\
+    .planning/phases/01-inventory-exclusions-manifest/01-05-PLAN.md|\
+    .planning/phases/01-inventory-exclusions-manifest/01-06-PLAN.md|\
+    .planning/phases/01-inventory-exclusions-manifest/01-07-PLAN.md)
+      [ "$text" = "$EXEC_REF_WF" ] && return 0
+      [ "$text" = "$EXEC_REF_TPL" ] && return 0
+      ;;
   esac
-  [ "$text" = "$CANON_D13" ] && return 0
   return 1
 }
 
