@@ -30,6 +30,9 @@ F_UND='_'
 F_DASH='-'
 F_APIKEY='apikey'
 F_GH='gh'
+F_GHL='[opusr]'
+F_GHF='github'
+F_PAT='pat'
 F_OP='[op]'
 F_XOXB='xoxb'
 F_PKB='BEGIN'
@@ -37,19 +40,27 @@ F_PKM=' .*'
 F_PKE='PRIVATE KEY'
 
 R_APIKEY="${F_APIKEY}${F_UND}"
-R_GH="${F_GH}${F_OP}${F_UND}"
+# Provider-issued tokens: gh followed by one of o|p|u|s|r then underscore.
+R_GH="${F_GH}${F_GHL}${F_UND}"
+# Fine-grained personal access tokens: github + underscore + pat + underscore.
+R_GHPAT="${F_GHF}${F_UND}${F_PAT}${F_UND}"
+# Both alternatives report under the single stable `github-token` rule name.
+R_GH_ALL="${R_GH}|${R_GHPAT}"
 R_SK='sk'"${F_DASH}"
 R_XOXB="${F_XOXB}${F_DASH}"
 R_PK="${F_PKB}${F_PKM}${F_PKE}"
 
 RULE_NAMES=( 'apikey-marker' 'github-token' 'secret-key-prefix' 'slack-token' 'private-key-marker' )
-RULE_ERES=( "${R_APIKEY}" "${R_GH}" "${R_SK}" "${R_XOXB}" "${R_PK}" )
+RULE_ERES=( "${R_APIKEY}" "${R_GH_ALL}" "${R_SK}" "${R_XOXB}" "${R_PK}" )
 
 # --- canonical documentation exceptions (exact path AND exact content) -------
 # Only the locked planning docs may carry canonical examples of the signatures,
 # and only on the exact lines below. Whole files or file types are never exempt.
 SIG_GHO="${F_GH}o${F_UND}"
-CANON_D09="- **D-09:** Pre-commit hook is bash grep fail-closed (zero deps); patterns cover \`${R_APIKEY}\`, \`${R_GH}\`, \`${R_SK}\`, \`${R_XOXB}\`, \`${R_PK}\`; aborts on hit with a named reason. No gitleaks binary (breaks no-sudo constraint)."
+# Frozen documented text: the locked docs literally record the narrow two-letter
+# class, so the allowlist string must not track the live (broadened) detector.
+SIG_GH_DOC="${F_GH}${F_OP}${F_UND}"
+CANON_D09="- **D-09:** Pre-commit hook is bash grep fail-closed (zero deps); patterns cover \`${R_APIKEY}\`, \`${SIG_GH_DOC}\`, \`${R_SK}\`, \`${R_XOXB}\`, \`${R_PK}\`; aborts on hit with a named reason. No gitleaks binary (breaks no-sudo constraint)."
 CANON_D10="- **D-10:** Secrets denied + \`.example\` templates only — \`jev.env\` values, \`.git-credentials\` (${SIG_GHO} token), \`.claude.json\` IDs never versioned; \`jev.env.example\` carries names only; keys re-entered by hand per PC."
 
 allowlist_check() {
@@ -106,11 +117,19 @@ scan_path() {
   done
 }
 
+# --- enumerate staged paths (fail closed on any Git enumeration error) ------
+# Capture output AND status before scanning: a Git failure here must block with
+# a named reason instead of letting an empty list produce a clean scan (CR-01).
+if ! staged_paths="$(git diff --cached --name-only --diff-filter=ACMR)"; then
+  printf 'BLOCKED: scan-failed (Git staged-path enumeration failed)\n' >&2
+  exit 1
+fi
+
 # --- scan every staged blob that will enter the commit ---------------------
 while IFS= read -r staged; do
   [ -n "$staged" ] || continue
   scan_path "$staged"
-done < <(git diff --cached --name-only --diff-filter=ACMR)
+done <<< "$staged_paths"
 
 if [ "$blocked" -ne 0 ]; then
   printf 'pre-commit: commit blocked by the secret gate (D-09). Bypass: git commit --no-verify.\n' >&2
