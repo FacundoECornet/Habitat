@@ -10,8 +10,14 @@
 #
 # Fail-closed policy:
 #   Only grep status 1 (no selected lines) is clean. Status 0 is a path leak.
-#   Any other grep status, a Git enumeration error, or an unreadable file blocks
-#   with a named `scan-failed` reason.
+#   Any other grep status, a Git enumeration error, a failed indexed-blob read,
+#   or an unreadable file blocks with a named `scan-failed` reason.
+#
+# NUL-safe enumeration:
+#   Candidate paths are enumerated with Git `-z` output into a mktemp file so
+#   arbitrary path bytes (non-ASCII, tab, quote, backslash) survive intact;
+#   Bash cannot hold NUL bytes in a variable. A tracked path whose indexed blob
+#   cannot be read blocks as `scan-failed` rather than being silently skipped.
 #
 # Home-root refusal:
 #   A supplied repository root that resolves to $HOME is refused BEFORE any file
@@ -67,11 +73,11 @@ W_EXAMPLE="${F_SLASH}${F_MNT}${F_SLASH}${F_C}${F_SLASH}${F_USERS}"
 CANON_D13="- **D-13:** Absolute-path scan is fail-closed: \`grep -rEn\` over versioned files for \`${H_EXAMPLE}\` and \`${W_EXAMPLE}\`; capture aborts on hit; small allowlist for intentional refs only."
 
 # Two fixed GSD execution-context reference lines appear in the immutable,
-# already-completed plan files 01-01 .. 01-07 (the execute-plan workflow and the
-# summary template). They are assembled from fragments so this script never
-# stores a complete machine-bound literal. Exemption requires BOTH the exact
-# plan path and the exact complete line content — whole plan files are never
-# exempt.
+# already-completed plan files 01-01 .. 01-07 and 01-11 .. 01-12 (the
+# execute-plan workflow and the summary template). They are assembled from
+# fragments so this script never stores a complete machine-bound literal.
+# Exemption requires BOTH the exact plan path and the exact complete line
+# content — whole plan files are never exempt.
 EXEC_REF_WF="${F_AT}${F_SLASH}${F_HOME}${F_SLASH}${F_USER}${F_SLASH}${F_CFG}${F_SLASH}${F_OC}${F_SLASH}${F_GSD}${F_SLASH}${F_WFD}${F_SLASH}${F_EXEC}"
 EXEC_REF_TPL="${F_AT}${F_SLASH}${F_HOME}${F_SLASH}${F_USER}${F_SLASH}${F_CFG}${F_SLASH}${F_OC}${F_SLASH}${F_GSD}${F_SLASH}${F_TPL}${F_SLASH}${F_SUM}"
 
@@ -88,7 +94,9 @@ allowlist_check() {
     .planning/phases/01-inventory-exclusions-manifest/01-04-PLAN.md|\
     .planning/phases/01-inventory-exclusions-manifest/01-05-PLAN.md|\
     .planning/phases/01-inventory-exclusions-manifest/01-06-PLAN.md|\
-    .planning/phases/01-inventory-exclusions-manifest/01-07-PLAN.md)
+    .planning/phases/01-inventory-exclusions-manifest/01-07-PLAN.md|\
+    .planning/phases/01-inventory-exclusions-manifest/01-11-PLAN.md|\
+    .planning/phases/01-inventory-exclusions-manifest/01-12-PLAN.md)
       [ "$text" = "$EXEC_REF_WF" ] && return 0
       [ "$text" = "$EXEC_REF_TPL" ] && return 0
       ;;
@@ -130,23 +138,42 @@ git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
 }
 
 # --- enumerate staged, tracked, and untracked candidate paths ---------------
-STAGED="$(git -C "$ROOT" diff --cached --name-only --diff-filter=ACMR 2>/dev/null)" || {
+# Bash variables truncate at the first NUL byte, so Git's NUL-delimited (-z)
+# output cannot be held in a string variable. Enumerate into a mktemp file and
+# preserve NUL boundaries through de-duplication (`sort -z -u`) and iteration
+# (`read -r -d ''`). Every Git command's exit status is checked before its
+# output is consumed; any failure blocks with a named scan-failed reason.
+CAND_RAW="$(mktemp)" || {
+  printf 'PATH LEAK: scan-failed (cannot create candidate list)\n' >&2
+  exit 2
+}
+CAND_SORTED="$(mktemp)" || {
+  printf 'PATH LEAK: scan-failed (cannot create candidate list)\n' >&2
+  rm -f "$CAND_RAW"
+  exit 2
+}
+cleanup_candidates() { rm -f "$CAND_RAW" "$CAND_SORTED"; }
+trap cleanup_candidates EXIT
+
+git -C "$ROOT" -c core.quotePath=false diff --cached --name-only --diff-filter=d -z > "$CAND_RAW" 2>/dev/null || {
   printf 'PATH LEAK: scan-failed (Git index enumeration error)\n' >&2
   exit 2
 }
-TRACKED="$(git -C "$ROOT" ls-files 2>/dev/null)" || {
+git -C "$ROOT" -c core.quotePath=false ls-files -z >> "$CAND_RAW" 2>/dev/null || {
   printf 'PATH LEAK: scan-failed (Git tracked enumeration error)\n' >&2
   exit 2
 }
-UNTRACKED="$(git -C "$ROOT" ls-files --others --exclude-standard 2>/dev/null)" || {
+git -C "$ROOT" -c core.quotePath=false ls-files --others --exclude-standard -z >> "$CAND_RAW" 2>/dev/null || {
   printf 'PATH LEAK: scan-failed (Git untracked enumeration error)\n' >&2
   exit 2
 }
 
-# `sed`/`sort` are used for de-duplication on purpose: routing this step through
-# `grep` would let a broken grep silently suppress candidates. Empties dropped.
-PATHS="$(printf '%s\n%s\n%s\n' "$STAGED" "$TRACKED" "$UNTRACKED" \
-  | sed '/^[[:space:]]*$/d' | sort -u)"
+# De-duplication is routed through `sort -z -u`, never `grep`, so a broken grep
+# cannot silently suppress candidates while NUL boundaries are preserved.
+sort -z -u "$CAND_RAW" > "$CAND_SORTED" 2>/dev/null || {
+  printf 'PATH LEAK: scan-failed (candidate de-duplication error)\n' >&2
+  exit 2
+}
 
 # --- reporting: path, rule, line only; never the matched text ---------------
 blocked=0
@@ -186,9 +213,16 @@ scan_content() {
 
 scan_path() {
   local path="$1" idx content full
-  # staged / tracked index blob
-  if idx="$(git -C "$ROOT" show ":$path" 2>/dev/null)"; then
-    scan_content "$path" "$idx"
+  # Indexed candidate: the path resolves in the index, so `git show ":$path"`
+  # MUST succeed. A failed indexed-blob read is a scan failure, never a silent
+  # skip. Untracked candidates have no index blob and are read from the worktree.
+  if git -C "$ROOT" ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
+    if idx="$(git -C "$ROOT" show ":$path" 2>/dev/null)"; then
+      scan_content "$path" "$idx"
+    else
+      report 'scan-failed' "$path" '?'
+      blocked=1
+    fi
   fi
   # tracked-modified / untracked worktree file (never a symlink)
   full="$ROOT/$path"
@@ -202,10 +236,10 @@ scan_path() {
   fi
 }
 
-while IFS= read -r p; do
+while IFS= read -r -d '' p; do
   [ -n "$p" ] || continue
   scan_path "$p"
-done <<< "$PATHS"
+done < "$CAND_SORTED"
 
 if [ "$blocked" -ne 0 ]; then
   printf 'check-path-leaks: scan BLOCKED (D-13). Remove machine-bound absolute paths; fix any scan errors.\n' >&2
