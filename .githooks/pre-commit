@@ -10,7 +10,15 @@
 # Fail-closed policy:
 #   grep status 0 means a match (block); status 1 alone means clean; any other
 #   status, a Git error, or an unreadable blob blocks with a named scan-failed
-#   reason.
+#   reason. Staged paths are enumerated NUL-delimited (`--diff-filter=d -z`) so
+#   every non-deletion status — including typechange — and every unusual
+#   (non-ASCII) filename reaches the scanner. Enumeration and index-blob read
+#   errors block instead of producing a clean scan.
+#
+# Detector policy:
+#   Prefix-style token rules require a plausible token-body length and the
+#   private-key rule is anchored to real PEM header structure, so ordinary
+#   hyphenated prose and documentation quoting a bare marker do not match.
 #
 # Bypass limitation:
 #   `git commit --no-verify` bypasses this hook by design (native Git behavior).
@@ -36,19 +44,25 @@ F_PAT='pat'
 F_OP='[op]'
 F_XOXB='xoxb'
 F_PKB='BEGIN'
-F_PKM=' .*'
+F_PKS=' '
+F_PKO='(RSA |EC |DSA |OPENSSH |ENCRYPTED )?'
 F_PKE='PRIVATE KEY'
+F_BODY='[A-Za-z0-9]{16,}'
+F_GHBODY='[A-Za-z0-9]{20,}'
 
-R_APIKEY="${F_APIKEY}${F_UND}"
-# Provider-issued tokens: gh followed by one of o|p|u|s|r then underscore.
-R_GH="${F_GH}${F_GHL}${F_UND}"
-# Fine-grained personal access tokens: github + underscore + pat + underscore.
-R_GHPAT="${F_GHF}${F_UND}${F_PAT}${F_UND}"
+R_APIKEY="${F_APIKEY}${F_UND}${F_BODY}"
+# Provider-issued tokens: gh followed by one of o|p|u|s|r then underscore,
+# then a token body.
+R_GH="${F_GH}${F_GHL}${F_UND}${F_GHBODY}"
+# Fine-grained personal access tokens: github + underscore + pat + underscore,
+# then a token body.
+R_GHPAT="${F_GHF}${F_UND}${F_PAT}${F_UND}${F_GHBODY}"
 # Both alternatives report under the single stable `github-token` rule name.
 R_GH_ALL="${R_GH}|${R_GHPAT}"
-R_SK='sk'"${F_DASH}"
-R_XOXB="${F_XOXB}${F_DASH}"
-R_PK="${F_PKB}${F_PKM}${F_PKE}"
+R_SK='sk'"${F_DASH}${F_BODY}"
+R_XOXB="${F_XOXB}${F_DASH}${F_BODY}"
+# Private-key detector anchored to real PEM header forms.
+R_PK="${F_PKB}${F_PKS}${F_PKO}${F_PKE}"
 
 RULE_NAMES=( 'apikey-marker' 'github-token' 'secret-key-prefix' 'slack-token' 'private-key-marker' )
 RULE_ERES=( "${R_APIKEY}" "${R_GH_ALL}" "${R_SK}" "${R_XOXB}" "${R_PK}" )
@@ -56,11 +70,17 @@ RULE_ERES=( "${R_APIKEY}" "${R_GH_ALL}" "${R_SK}" "${R_XOXB}" "${R_PK}" )
 # --- canonical documentation exceptions (exact path AND exact content) -------
 # Only the locked planning docs may carry canonical examples of the signatures,
 # and only on the exact lines below. Whole files or file types are never exempt.
+# These fragments are FROZEN to the documented text and decoupled from the live
+# (tightened) detectors, so the exemption keeps matching the verbatim docs.
+DOC_APIKEY="${F_APIKEY}${F_UND}"
+DOC_SK='sk'"${F_DASH}"
+DOC_XOXB="${F_XOXB}${F_DASH}"
+DOC_PK="${F_PKB} .*${F_PKE}"
 SIG_GHO="${F_GH}o${F_UND}"
 # Frozen documented text: the locked docs literally record the narrow two-letter
 # class, so the allowlist string must not track the live (broadened) detector.
 SIG_GH_DOC="${F_GH}${F_OP}${F_UND}"
-CANON_D09="- **D-09:** Pre-commit hook is bash grep fail-closed (zero deps); patterns cover \`${R_APIKEY}\`, \`${SIG_GH_DOC}\`, \`${R_SK}\`, \`${R_XOXB}\`, \`${R_PK}\`; aborts on hit with a named reason. No gitleaks binary (breaks no-sudo constraint)."
+CANON_D09="- **D-09:** Pre-commit hook is bash grep fail-closed (zero deps); patterns cover \`${DOC_APIKEY}\`, \`${SIG_GH_DOC}\`, \`${DOC_SK}\`, \`${DOC_XOXB}\`, \`${DOC_PK}\`; aborts on hit with a named reason. No gitleaks binary (breaks no-sudo constraint)."
 CANON_D10="- **D-10:** Secrets denied + \`.example\` templates only — \`jev.env\` values, \`.git-credentials\` (${SIG_GHO} token), \`.claude.json\` IDs never versioned; \`jev.env.example\` carries names only; keys re-entered by hand per PC."
 
 allowlist_check() {
@@ -118,18 +138,27 @@ scan_path() {
 }
 
 # --- enumerate staged paths (fail closed on any Git enumeration error) ------
-# Capture output AND status before scanning: a Git failure here must block with
-# a named reason instead of letting an empty list produce a clean scan (CR-01).
-if ! staged_paths="$(git diff --cached --name-only --diff-filter=ACMR)"; then
+# Enumerate into a temporary file with NUL separation: Bash variables cannot
+# hold NUL bytes, and `--diff-filter=d -z` retains every non-deletion status
+# (including typechange `T`) as well as unusual/non-ASCII names verbatim.
+# Capture the Git status before scanning: a Git failure here must block with a
+# named reason instead of letting an empty list produce a clean scan (CR-01).
+staged_list="$(mktemp)" || {
+  printf 'BLOCKED: scan-failed (cannot create staged-path enumeration list)\n' >&2
+  exit 1
+}
+trap 'rm -f "$staged_list"' EXIT
+
+if ! git diff --cached --name-only --diff-filter=d -z > "$staged_list"; then
   printf 'BLOCKED: scan-failed (Git staged-path enumeration failed)\n' >&2
   exit 1
 fi
 
 # --- scan every staged blob that will enter the commit ---------------------
-while IFS= read -r staged; do
+while IFS= read -r -d '' staged; do
   [ -n "$staged" ] || continue
   scan_path "$staged"
-done <<< "$staged_paths"
+done < "$staged_list"
 
 if [ "$blocked" -ne 0 ]; then
   printf 'pre-commit: commit blocked by the secret gate (D-09). Bypass: git commit --no-verify.\n' >&2
