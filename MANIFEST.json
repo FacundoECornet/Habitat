@@ -1,0 +1,183 @@
+{
+  "version": "1.0.0",
+  "generated": "2026-10-13T13:40:21Z",
+  "entries": [
+    {
+      "origin": ".config/opencode",
+      "dest": "home/.config/opencode",
+      "mode": "copy",
+      "excludes": [
+        "node_modules/",
+        "bin/",
+        "*.tar.gz",
+        "*.tgz",
+        "*.tar",
+        "*.zip",
+        "*.bak*",
+        "opencode-backup/",
+        "opencode-backup-*.tar.gz",
+        "agents.bak-*",
+        "jev.env",
+        ".git-credentials",
+        ".claude.json",
+        "*.local"
+      ],
+      "post_steps": ["npm ci"]
+    },
+    {
+      "origin": ".claude/skills",
+      "dest": "home/.claude/skills",
+      "mode": "copy",
+      "excludes": [
+        "node_modules/",
+        "bin/",
+        "*.tar.gz",
+        "*.tgz",
+        "*.tar",
+        "*.zip",
+        "*.bak*",
+        "opencode-backup/",
+        "opencode-backup-*.tar.gz",
+        "agents.bak-*",
+        "jev.env",
+        ".git-credentials",
+        ".claude.json",
+        "*.local",
+        "archify"
+      ],
+      "post_steps": []
+    },
+    {
+      "origin": ".agents/skills",
+      "dest": "home/.agents/skills",
+      "mode": "copy",
+      "excludes": [
+        "node_modules/",
+        "bin/",
+        "*.tar.gz",
+        "*.tgz",
+        "*.tar",
+        "*.zip",
+        "*.bak*",
+        "opencode-backup/",
+        "opencode-backup-*.tar.gz",
+        "agents.bak-*",
+        "jev.env",
+        ".git-credentials",
+        ".claude.json",
+        "*.local"
+      ],
+      "post_steps": []
+    },
+    {
+      "origin": ".gsd",
+      "dest": "home/.gsd",
+      "mode": "copy",
+      "excludes": [
+        "node_modules/",
+        "bin/",
+        "*.tar.gz",
+        "*.tgz",
+        "*.tar",
+        "*.zip",
+        "*.bak*",
+        "opencode-backup/",
+        "opencode-backup-*.tar.gz",
+        "agents.bak-*",
+        "jev.env",
+        ".git-credentials",
+        ".claude.json",
+        "*.local"
+      ],
+      "post_steps": []
+    },
+    {
+      "origin": ".opencode",
+      "dest": "home/.opencode",
+      "mode": "copy",
+      "excludes": [
+        "node_modules/",
+        "bin/",
+        "*.tar.gz",
+        "*.tgz",
+        "*.tar",
+        "*.zip",
+        "*.bak*",
+        "opencode-backup/",
+        "opencode-backup-*.tar.gz",
+        "agents.bak-*",
+        "jev.env",
+        ".git-credentials",
+        ".claude.json",
+        "*.local"
+      ],
+      "post_steps": ["npm ci"]
+    },
+    {
+      "origin": "AGENTS.md",
+      "dest": "home/AGENTS.md",
+      "mode": "copy",
+      "excludes": [
+        "node_modules/",
+        "bin/",
+        "*.tar.gz",
+        "*.tgz",
+        "*.tar",
+        "*.zip",
+        "*.bak*",
+        "opencode-backup/",
+        "opencode-backup-*.tar.gz",
+        "agents.bak-*",
+        "jev.env",
+        ".git-credentials",
+        ".claude.json",
+        "*.local"
+      ],
+      "post_steps": []
+    },
+    {
+      "origin": ".bashrc",
+      "dest": "home/.bashrc",
+      "mode": "copy",
+      "excludes": [
+        "node_modules/",
+        "bin/",
+        "*.tar.gz",
+        "*.tgz",
+        "*.tar",
+        "*.zip",
+        "*.bak*",
+        "opencode-backup/",
+        "opencode-backup-*.tar.gz",
+        "agents.bak-*",
+        "jev.env",
+        ".git-credentials",
+        ".claude.json",
+        "*.local"
+      ],
+      "post_steps": []
+    },
+    {
+      "origin": ".gitconfig",
+      "dest": "home/.gitconfig",
+      "mode": "copy",
+      "excludes": [
+        "node_modules/",
+        "bin/",
+        "*.tar.gz",
+        "*.tgz",
+        "*.tar",
+        "*.zip",
+        "*.bak*",
+        "opencode-backup/",
+        "opencode-backup-*.tar.gz",
+        "agents.bak-*",
+        "jev.env",
+        ".git-credentials",
+        ".claude.json",
+        "*.local"
+      ],
+      "post_steps": []
+    }
+  ]
+}
