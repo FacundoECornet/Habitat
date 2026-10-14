@@ -1,0 +1,421 @@
+#!/usr/bin/env bash
+# capture.sh — manifest-driven capture, drift preview, read-only remote preflight
+#
+# What it does:
+#   Reads MANIFEST.json through the shared lib/manifest.sh reader (D-10), runs
+#   the strict manifest validator first, preflights every live origin, then
+#   mirrors each approved root into the repo `home/` payload with rsync. With
+#   `--dry-run` it writes nothing and instead prints a per-entry drift report
+#   (added/changed/removed regular-file counts + signed net byte delta + the
+#   rsync itemized listing) and exits nonzero when drift exists (D-05/D-06).
+#
+# Front-door decisions honored:
+#   D-01 exact mirror per entry (rsync --delete)      D-02 refuse on any bad origin
+#   D-05 dry-run report                               D-06 dry-run exit contract
+#   D-07 rsync required, no cp -a fallback            D-08 read-only remote preflight
+#   D-09 payload only — never stage/commit/push       D-10 shared manifest parser
+#
+# Fail-closed policy:
+#   Only a fully validated manifest and eight readable origins reach rsync.
+#   Every refusal prints a named `capture: <code> (...)` diagnostic to stderr
+#   and exits nonzero BEFORE any payload mutation or deletion.
+#
+# Safety:
+#   Capture writes only manifest destinations under `home/`. It never runs
+#   `git add`, `git commit`, `git push`, or any remote-mutating command.
+#
+# Usage:
+#   scripts/capture.sh [--dry-run]
+#
+# NOTE: `set -e` is deliberately omitted — rsync and read exit statuses are
+# handled explicitly. Only `set -u` and `set -o pipefail` are enabled.
+
+set -u
+set -o pipefail
+
+# --- argument parsing -------------------------------------------------------
+DRY_RUN=0
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=1 ;;
+    -h|--help)
+      printf 'Usage: capture.sh [--dry-run]\n'
+      exit 0
+      ;;
+    *)
+      printf 'capture: unknown-argument (%s)\n' "$arg" >&2
+      exit 2
+      ;;
+  esac
+done
+
+# --- required runtime -------------------------------------------------------
+[ -n "${BASH_VERSION:-}" ] || {
+  printf 'capture: bash-required (D-07)\n' >&2
+  exit 2
+}
+for tool in git node rsync; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    case "$tool" in
+      rsync) printf 'capture: rsync required (D-07) — install rsync (e.g. sudo apt install rsync) and retry\n' >&2 ;;
+      node)  printf 'capture: node required (manifest parser, D-10) — install Node.js and retry\n' >&2 ;;
+      git)   printf 'capture: git required (repository root + remote report, D-08) — install Git and retry\n' >&2 ;;
+    esac
+    exit 2
+  }
+done
+
+# --- resolve repository root (script location / Git, D-10) ------------------
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null || true)"
+[ -n "$repo_root" ] || repo_root="$(cd "$script_dir/.." && pwd)"
+manifest_path="$repo_root/MANIFEST.json"
+
+[ -n "${HOME:-}" ] || {
+  printf 'capture: home-unset (D-02) — HOME must point at the live ecosystem root\n' >&2
+  exit 2
+}
+
+# --- run the strict manifest validator before parsing or mutation (D-10) ----
+validator="$script_dir/validate-manifest.sh"
+[ -f "$validator" ] || {
+  printf 'capture: validator-missing (expected scripts/validate-manifest.sh, D-10)\n' >&2
+  exit 2
+}
+if ! bash "$validator" "$manifest_path"; then
+  printf 'capture: manifest-invalid (D-10) — refusing before any copy or delete\n' >&2
+  exit 2
+fi
+
+# --- consume the shared manifest reader (D-10) ------------------------------
+lib="$script_dir/../lib/manifest.sh"
+[ -f "$lib" ] || {
+  printf 'capture: manifest-library-missing (expected lib/manifest.sh, D-10)\n' >&2
+  exit 2
+}
+# shellcheck source=../lib/manifest.sh
+. "$lib"
+command -v manifest_entries >/dev/null 2>&1 || {
+  printf 'capture: manifest-reader-undefined (lib/manifest.sh, D-10)\n' >&2
+  exit 2
+}
+
+work="$(mktemp -d)" || {
+  printf 'capture: workdir-failed (cannot create temporary workspace)\n' >&2
+  exit 2
+}
+cleanup() { rm -rf "$work"; }
+trap cleanup EXIT
+
+tokens="$work/manifest.tokens"
+if ! manifest_entries "$manifest_path" "$tokens"; then
+  printf 'capture: manifest-parse-failed (D-10)\n' >&2
+  exit 2
+fi
+
+# --- read the NUL-delimited token stream into parallel arrays ---------------
+origins=(); dests=(); modes=(); types=()
+entry_count=0
+exec 3< "$tokens" || {
+  printf 'capture: manifest-parse-failed (cannot open token stream)\n' >&2
+  exit 2
+}
+while IFS= read -r -d '' origin <&3; do
+  IFS= read -r -d '' dest <&3 || break
+  IFS= read -r -d '' mode <&3 || break
+  IFS= read -r -d '' excount <&3 || break
+
+  exf="$work/excludes.$entry_count"
+  : > "$exf"
+  i=0
+  ok=1
+  while [ "$i" -lt "$excount" ]; do
+    if IFS= read -r -d '' tok <&3; then
+      printf '%s\n' "$tok" >> "$exf"
+    else
+      ok=0
+      break
+    fi
+    i=$((i + 1))
+  done
+  [ "$ok" -eq 1 ] || break
+
+  IFS= read -r -d '' pscount <&3 || break
+  i=0
+  while [ "$i" -lt "$pscount" ]; do
+    IFS= read -r -d '' tok <&3 || { ok=0; break; }
+    i=$((i + 1))
+  done
+  [ "$ok" -eq 1 ] || break
+
+  origins+=("$origin")
+  dests+=("$dest")
+  modes+=("$mode")
+  entry_count=$((entry_count + 1))
+done
+exec 3<&-
+
+if [ "$entry_count" -eq 0 ]; then
+  printf 'capture: manifest-empty (no entries parsed, D-10)\n' >&2
+  exit 2
+fi
+
+# --- read-only remote preflight (D-08 / INV-01) -----------------------------
+remote_preflight() {
+  local names count
+  names="$(git -C "$repo_root" remote 2>/dev/null | LC_ALL=C sort -u)"
+  if [ -z "$names" ]; then
+    printf 'REMOTE: none configured — INV-01 pending (no URL invented, D-08)\n'
+    printf 'REMOTE: a listed URL alone does not prove provider visibility is Private; operator confirmation required (D-08)\n'
+    return 0
+  fi
+  count="$(printf '%s\n' "$names" | grep -c .)"
+  printf 'REMOTE: %d configured\n' "$count"
+  git -C "$repo_root" remote -v 2>/dev/null \
+    | sed -E 's#(://)[^/@[:space:]]*@#\1***@#g' \
+    | sed 's/^/REMOTE: /'
+  if [ "$count" -gt 1 ]; then
+    printf 'REMOTE: ambiguous — multiple remotes; INV-01 pending (D-08)\n'
+  fi
+  printf 'REMOTE: INV-01 pending — URL listing does not prove provider visibility is Private (D-08)\n'
+  return 0
+}
+remote_preflight
+
+# --- NUL-safe drift accounting for a directory entry ------------------------
+# Compares a manifest-filtered source snapshot against the destination tree by
+# relative path, content checksum, and executable bit. Prints
+#   "<added> <changed> <removed> <signed-delta-bytes>"
+account_dir() {
+  node - "$1" "$2" <<'NODE'
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const stageRoot = process.argv[2];
+const dstRoot = process.argv[3];
+
+function walk(root) {
+  const map = new Map();
+  let st;
+  try { st = fs.lstatSync(root); } catch (err) { return map; }
+  if (!st.isDirectory()) return map;
+  const stack = [['', root]];
+  while (stack.length) {
+    const item = stack.pop();
+    const rel = item[0];
+    const abs = item[1];
+    let ents;
+    try { ents = fs.readdirSync(abs, { withFileTypes: true }); } catch (err) { continue; }
+    for (const d of ents) {
+      const r = rel ? rel + '/' + d.name : d.name;
+      const a = path.join(abs, d.name);
+      let s;
+      try { s = fs.lstatSync(a); } catch (err) { continue; }
+      if (s.isSymbolicLink()) continue;
+      if (s.isDirectory()) { stack.push([r, a]); continue; }
+      if (!s.isFile()) continue;
+      let hash = '';
+      try { hash = crypto.createHash('sha256').update(fs.readFileSync(a)).digest('hex'); }
+      catch (err) { hash = 'READ-ERROR'; }
+      map.set(r, { size: s.size, exec: (s.mode & 0o111) !== 0, hash: hash });
+    }
+  }
+  return map;
+}
+
+const src = walk(stageRoot);
+const dst = walk(dstRoot);
+let added = 0;
+let changed = 0;
+let removed = 0;
+let delta = 0;
+
+for (const [k, v] of src) {
+  if (!dst.has(k)) { added++; delta += v.size; }
+}
+for (const [k, v] of dst) {
+  if (!src.has(k)) { removed++; delta -= v.size; }
+}
+for (const [k, sv] of src) {
+  if (dst.has(k)) {
+    const dv = dst.get(k);
+    if (sv.hash !== dv.hash || sv.exec !== dv.exec) {
+      changed++;
+      delta += sv.size - dv.size;
+    }
+  }
+}
+
+process.stdout.write(added + ' ' + changed + ' ' + removed + ' ' + delta + '\n');
+NODE
+}
+
+# --- headless preflight: every origin present, readable, expected type ------
+# Runs to completion BEFORE any rsync --delete so a wrong-machine run can never
+# erase the payload to match an absent or unreadable source (D-02).
+for ((idx = 0; idx < entry_count; idx++)); do
+  origin="${origins[$idx]}"
+  dest="${dests[$idx]}"
+  src="$HOME/$origin"
+  dst="$repo_root/$dest"
+
+  if [ -d "$src" ]; then
+    types[$idx]="dir"
+  elif [ -f "$src" ]; then
+    types[$idx]="file"
+  else
+    printf 'capture: origin-missing (%s) — refusing before any change (D-02)\n' "$origin" >&2
+    exit 2
+  fi
+  if [ ! -r "$src" ]; then
+    printf 'capture: origin-unreadable (%s) — refusing before any change (D-02)\n' "$origin" >&2
+    exit 2
+  fi
+  if [ "${types[$idx]}" = "dir" ] && [ -f "$dst" ]; then
+    printf 'capture: dest-type-mismatch (%s is a file; manifest expects a directory) — refusing (D-02)\n' "$dest" >&2
+    exit 2
+  fi
+  if [ "${types[$idx]}" = "file" ] && [ -d "$dst" ]; then
+    printf 'capture: dest-type-mismatch (%s is a directory; manifest expects a file) — refusing (D-02)\n' "$dest" >&2
+    exit 2
+  fi
+done
+
+# --- shared rsync comparison policy -----------------------------------------
+# Git-representable equality: content checksum + executable bit only. Owner,
+# group, and mtime are never compared, so a fresh checkout cannot report
+# persistent phantom drift (RESEARCH Pitfall 3).
+RS_DIR=(-r -p --no-links --checksum --no-owner --no-group --no-times --delete --delete-excluded)
+RS_FILE=(-p --no-links --checksum --no-owner --no-group --no-times)
+
+overall_drift=0
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  printf 'capture: dry-run — read-only drift preview (D-05/D-06)\n'
+else
+  printf 'capture: capturing into %s\n' "$repo_root"
+fi
+
+for ((idx = 0; idx < entry_count; idx++)); do
+  origin="${origins[$idx]}"
+  dest="${dests[$idx]}"
+  type="${types[$idx]}"
+  src="$HOME/$origin"
+  dst="$repo_root/$dest"
+  exf="$work/excludes.$idx"
+
+  rflags=()
+  if [ "$type" = "file" ]; then
+    rflags=("${RS_FILE[@]}" "--exclude-from=$exf")
+  else
+    rflags=("${RS_DIR[@]}" "--exclude-from=$exf")
+  fi
+
+  if [ "$DRY_RUN" -eq 0 ]; then
+    if [ "$type" = "file" ]; then
+      mkdir -p "$(dirname "$dst")"
+      if ! rsync "${rflags[@]}" "$src" "$dst"; then
+        printf 'capture: rsync-failed (%s)\n' "$dest" >&2
+        exit 2
+      fi
+    else
+      mkdir -p "$dst"
+      if ! rsync "${rflags[@]}" "$src/" "$dst/"; then
+        printf 'capture: rsync-failed (%s)\n' "$dest" >&2
+        exit 2
+      fi
+    fi
+    continue
+  fi
+
+  # --- dry-run: itemize listing + NUL-safe accounting ---------------------
+  itemize="$work/itemize.$idx"
+  if [ "$type" = "file" ]; then
+    if [ -d "$(dirname "$dst")" ]; then
+      if ! rsync "${rflags[@]}" --dry-run --itemize-changes "$src" "$dst" > "$itemize" 2>/dev/null; then
+        printf 'capture: rsync-failed (%s)\n' "$dest" >&2
+        exit 2
+      fi
+    else
+      : > "$itemize"
+      if [ ! -e "$dst" ]; then
+        printf '>f+++++++++ %s\n' "$(basename "$dest")" > "$itemize"
+      fi
+    fi
+  else
+    if ! rsync "${rflags[@]}" --dry-run --itemize-changes "$src/" "$dst/" > "$itemize" 2>/dev/null; then
+      printf 'capture: rsync-failed (%s)\n' "$dest" >&2
+      exit 2
+    fi
+  fi
+
+  added=0
+  changed=0
+  removed=0
+  delta=0
+  # rsync writes informational notes (e.g. "skipping non-regular file") to
+  # stdout alongside the itemize listing. Drift is decided only by real itemize
+  # event lines, whose two leading status characters match [<>ch.*][fdLDS].
+  has_itemize=0
+  if grep -qE '^[<>ch.*][fdLDS]' "$itemize" 2>/dev/null; then
+    has_itemize=1
+  fi
+
+  if [ "$has_itemize" -eq 1 ]; then
+    if [ "$type" = "file" ]; then
+      if [ ! -e "$dst" ]; then
+        added=1
+        delta="$(stat -c %s "$src")"
+      elif cmp -s "$src" "$dst"; then
+        if [ -x "$src" ] && [ ! -x "$dst" ] || [ ! -x "$src" ] && [ -x "$dst" ]; then
+          changed=1
+        fi
+      else
+        changed=1
+        delta=$(( $(stat -c %s "$src") - $(stat -c %s "$dst") ))
+      fi
+    else
+      stage="$work/stage.$idx"
+      rm -rf "$stage"
+      mkdir -p "$stage"
+      if ! rsync -r -p --no-links --exclude-from="$exf" "$src/" "$stage/" 2>/dev/null; then
+        printf 'capture: stage-failed (%s)\n' "$dest" >&2
+        exit 2
+      fi
+      vals="$(account_dir "$stage" "$dst")" || {
+        printf 'capture: account-failed (%s)\n' "$dest" >&2
+        exit 2
+      }
+      if [ -z "$vals" ]; then
+        printf 'capture: account-failed (%s)\n' "$dest" >&2
+        exit 2
+      fi
+      read -r added changed removed delta <<< "$vals"
+    fi
+  fi
+
+  printf '[entry %s -> %s]\n' "$origin" "$dest"
+  printf 'added=%s changed=%s removed=%s delta=%s\n' "$added" "$changed" "$removed" "$delta"
+  if [ -s "$itemize" ]; then
+    sed 's/^/  /' "$itemize"
+  fi
+
+  if [ "$has_itemize" -eq 1 ] || [ "$added" -ne 0 ] || [ "$changed" -ne 0 ] || [ "$removed" -ne 0 ]; then
+    overall_drift=1
+  fi
+done
+
+# --- exit contract ----------------------------------------------------------
+if [ "$DRY_RUN" -eq 1 ]; then
+  if [ "$overall_drift" -eq 0 ]; then
+    printf 'DRIFT: none\n'
+    exit 0
+  fi
+  printf 'DRIFT: detected (repo differs from the machine)\n'
+  exit 1
+fi
+
+printf 'capture: wrote payload only (D-09) — review git status, then commit and push\n'
+exit 0
