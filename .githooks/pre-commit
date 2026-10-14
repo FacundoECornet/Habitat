@@ -16,9 +16,13 @@
 #   errors block instead of producing a clean scan.
 #
 # Detector policy:
-#   Prefix-style token rules require a plausible token-body length and the
-#   private-key rule is anchored to real PEM header structure, so ordinary
-#   hyphenated prose and documentation quoting a bare marker do not match.
+#   The five secret-signature rules are defined once in lib/secret-scan.sh
+#   (fragment-built) and sourced here, so this gate and capture's scans cannot
+#   drift (D-04/D-10). Prefix-style token rules require a plausible token-body
+#   length and the private-key rule is anchored to real PEM header structure, so
+#   ordinary hyphenated prose and documentation quoting a bare marker do not
+#   match. Only a narrow exact-path + exact-content allowlist of the locked
+#   planning docs is exempted.
 #
 # Bypass limitation:
 #   `git commit --no-verify` bypasses this hook by design (native Git behavior).
@@ -31,44 +35,15 @@
 set -u
 set -o pipefail
 
-# --- detector expressions assembled from fragments ---------------------------
-# A complete signature is never written as a literal, so this hook does not
-# self-match when its own source is staged.
-F_UND='_'
-F_DASH='-'
-F_APIKEY='apikey'
-F_GH='gh'
-F_GHL='[opusr]'
-F_GHF='github'
-F_PAT='pat'
-F_OP='[op]'
-F_XOXB='xoxb'
-F_PKB='BEGIN'
-F_PKS=' '
-F_PKO='(RSA |EC |DSA |OPENSSH |ENCRYPTED )?'
-F_PKE='PRIVATE KEY'
-F_PKDL='-----'
-F_BODY='[A-Za-z0-9]{16,}'
-F_GHBODY='[A-Za-z0-9]{20,}'
-
-R_APIKEY="${F_APIKEY}${F_UND}${F_BODY}"
-# Provider-issued tokens: gh followed by one of o|p|u|s|r then underscore,
-# then a token body.
-R_GH="${F_GH}${F_GHL}${F_UND}${F_GHBODY}"
-# Fine-grained personal access tokens: github + underscore + pat + underscore,
-# then a token body.
-R_GHPAT="${F_GHF}${F_UND}${F_PAT}${F_UND}${F_GHBODY}"
-# Both alternatives report under the single stable `github-token` rule name.
-R_GH_ALL="${R_GH}|${R_GHPAT}"
-R_SK='sk'"${F_DASH}${F_BODY}"
-R_XOXB="${F_XOXB}${F_DASH}${F_BODY}"
-# Private-key detector anchored to real PEM header structure: the dashed
-# delimiter (-----BEGIN ... PRIVATE KEY-----) makes it match actual PEM headers
-# while tolerating ordinary prose that merely mentions the header words.
-R_PK="${F_PKDL}${F_PKB}${F_PKS}${F_PKO}${F_PKE}${F_PKDL}"
-
-RULE_NAMES=( 'apikey-marker' 'github-token' 'secret-key-prefix' 'slack-token' 'private-key-marker' )
-RULE_ERES=( "${R_APIKEY}" "${R_GH_ALL}" "${R_SK}" "${R_XOXB}" "${R_PK}" )
+# --- load the shared fragment-built secret detector (D-04/D-10) ------------
+# The five rules live in one library so this gate and capture's scans can never
+# drift. The library assembles every signature from fragments, so neither this
+# hook nor the library self-matches when its own source is staged.
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! . "$HOOK_DIR/../lib/secret-scan.sh"; then
+  printf 'BLOCKED: scan-failed (cannot load shared secret detector lib/secret-scan.sh)\n' >&2
+  exit 1
+fi
 
 # --- canonical documentation exceptions (exact path AND exact content) -------
 # Only the locked planning docs may carry canonical examples of the signatures,
@@ -99,45 +74,19 @@ allowlist_check() {
   return 1
 }
 
-# --- reporting (rule + path + line only; never matched bytes) ---------------
+# --- reporting via the shared library (rule + path + line; never bytes) ------
 blocked=0
-report_block() {
-  printf 'BLOCKED: rule=%s path=%s line=%s\n' "$1" "$2" "$3" >&2
-}
 
 scan_path() {
   local path="$1" content
   if ! content="$(git show ":$path" 2>/dev/null)"; then
-    report_block 'scan-failed' "$path" '?'
+    secret_report 'scan-failed' "$path" '?'
     blocked=1
     return
   fi
 
-  local i name ere out rc ln lineno text
-  for i in "${!RULE_NAMES[@]}"; do
-    name="${RULE_NAMES[$i]}"
-    ere="${RULE_ERES[$i]}"
-    out="$(printf '%s\n' "$content" | grep -nE -I -- "$ere" 2>/dev/null)"
-    rc=$?
-    if [ "$rc" -eq 0 ]; then
-      while IFS= read -r ln; do
-        [ -n "$ln" ] || continue
-        lineno="${ln%%:*}"
-        text="${ln#*:}"
-        if allowlist_check "$path" "$text"; then
-          continue
-        fi
-        report_block "$name" "$path" "$lineno"
-        blocked=1
-      done <<< "$out"
-    elif [ "$rc" -eq 1 ]; then
-      :
-    else
-      report_block 'scan-failed' "$path" '?'
-      blocked=1
-      return
-    fi
-  done
+  secret_scan_content "$path" "$content" allowlist_check
+  [ "$SECRET_SCAN_BLOCKED" -eq 1 ] && blocked=1
 }
 
 # --- enumerate staged paths (fail closed on any Git enumeration error) ------

@@ -18,6 +18,12 @@
 **/*token*
 **/*secret*
 
+# --- tracked source whose name merely contains "secret" (not a secret) ---
+# The broad **/*secret* guard above would otherwise hide the shared detector
+# library and its regression suite; re-include these exact paths only.
+!lib/secret-scan.sh
+!tests/pre-commit-secret.sh
+
 # --- generated / reinstallable (rebuilt by `npm ci`) ---
 **/node_modules/
 **/bin/
