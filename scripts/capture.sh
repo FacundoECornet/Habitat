@@ -4,13 +4,20 @@
 # What it does:
 #   Reads MANIFEST.json through the shared lib/manifest.sh reader (D-10), runs
 #   the strict manifest validator first, preflights every live origin, then
-#   mirrors each approved root into the repo `home/` payload with rsync. With
+#   mirrors each approved root into a restrictive same-filesystem staged
+#   candidate tree with rsync. The candidate is scanned by the shared secret
+#   detector (lib/secret-scan.sh) and the physical-tree path scanner
+#   (scripts/check-path-leaks.sh --tree) BEFORE the live repo `home/` is touched;
+#   only the exact scanned candidate bytes are promoted (D-03). The published
+#   `home/` is scanned again as a second gate, and any finding, scan error, or
+#   promotion failure restores the complete prior `home/` tree (D-04). With
 #   `--dry-run` it writes nothing and instead prints a per-entry drift report
 #   (added/changed/removed regular-file counts + signed net byte delta + the
 #   rsync itemized listing) and exits nonzero when drift exists (D-05/D-06).
 #
 # Front-door decisions honored:
 #   D-01 exact mirror per entry (rsync --delete)      D-02 refuse on any bad origin
+#   D-03 pre-scan staged bytes before writing         D-04 post-copy physical re-scan
 #   D-05 dry-run report                               D-06 dry-run exit contract
 #   D-07 rsync required, no cp -a fallback            D-08 read-only remote preflight
 #   D-09 payload only — never stage/commit/push       D-10 shared manifest parser
@@ -20,9 +27,14 @@
 #   Every refusal prints a named `capture: <code> (...)` diagnostic to stderr
 #   and exits nonzero BEFORE any payload mutation or deletion.
 #
+# Scan scope:
+#   Diagnostics describe tested detector coverage (the five shared secret rules
+#   and the two absolute-path families), not exhaustive credential discovery.
+#
 # Safety:
-#   Capture writes only manifest destinations under `home/`. It never runs
-#   `git add`, `git commit`, `git push`, or any remote-mutating command.
+#   Capture writes only the manifest destinations, published as a whole scanned
+#   `home/` tree. It never runs `git add`, `git commit`, `git push`, or any
+#   remote-mutating command.
 #
 # Usage:
 #   scripts/capture.sh [--dry-run]
@@ -100,7 +112,30 @@ command -v manifest_entries >/dev/null 2>&1 || {
   exit 2
 }
 
-work="$(mktemp -d)" || {
+# --- shared secret detector + physical-tree path scanner (D-04) -------------
+secret_lib="$script_dir/../lib/secret-scan.sh"
+[ -f "$secret_lib" ] || {
+  printf 'capture: secret-detector-missing (expected lib/secret-scan.sh, D-04)\n' >&2
+  exit 2
+}
+# shellcheck source=../lib/secret-scan.sh
+. "$secret_lib"
+command -v secret_scan_tree >/dev/null 2>&1 || {
+  printf 'capture: secret-detector-undefined (lib/secret-scan.sh, D-04)\n' >&2
+  exit 2
+}
+scanner="$script_dir/check-path-leaks.sh"
+[ -f "$scanner" ] || {
+  printf 'capture: path-scanner-missing (expected scripts/check-path-leaks.sh, D-04)\n' >&2
+  exit 2
+}
+
+# --- same-filesystem staged workspace (so promotion is a rename) ------------
+# The work tree lives beside the git directory so the staged candidate and the
+# published home/ share a filesystem and promotion can be an atomic rename.
+git_dir="$(git -C "$repo_root" rev-parse --absolute-git-dir 2>/dev/null || true)"
+[ -n "$git_dir" ] || git_dir="$repo_root"
+work="$(mktemp -d "$git_dir/.habitat-capture.XXXXXX")" || {
   printf 'capture: workdir-failed (cannot create temporary workspace)\n' >&2
   exit 2
 }
@@ -292,123 +327,102 @@ RS_FILE=(-p --no-links --checksum --no-owner --no-group --no-times)
 
 overall_drift=0
 
+# ================= dry-run: read-only drift preview (D-05/D-06) =============
 if [ "$DRY_RUN" -eq 1 ]; then
   printf 'capture: dry-run — read-only drift preview (D-05/D-06)\n'
-else
-  printf 'capture: capturing into %s\n' "$repo_root"
-fi
 
-for ((idx = 0; idx < entry_count; idx++)); do
-  origin="${origins[$idx]}"
-  dest="${dests[$idx]}"
-  type="${types[$idx]}"
-  src="$HOME/$origin"
-  dst="$repo_root/$dest"
-  exf="$work/excludes.$idx"
+  for ((idx = 0; idx < entry_count; idx++)); do
+    origin="${origins[$idx]}"
+    dest="${dests[$idx]}"
+    type="${types[$idx]}"
+    src="$HOME/$origin"
+    dst="$repo_root/$dest"
+    exf="$work/excludes.$idx"
 
-  rflags=()
-  if [ "$type" = "file" ]; then
-    rflags=("${RS_FILE[@]}" "--exclude-from=$exf")
-  else
-    rflags=("${RS_DIR[@]}" "--exclude-from=$exf")
-  fi
-
-  if [ "$DRY_RUN" -eq 0 ]; then
+    rflags=()
     if [ "$type" = "file" ]; then
-      mkdir -p "$(dirname "$dst")"
-      if ! rsync "${rflags[@]}" "$src" "$dst"; then
-        printf 'capture: rsync-failed (%s)\n' "$dest" >&2
-        exit 2
-      fi
+      rflags=("${RS_FILE[@]}" "--exclude-from=$exf")
     else
-      mkdir -p "$dst"
-      if ! rsync "${rflags[@]}" "$src/" "$dst/"; then
-        printf 'capture: rsync-failed (%s)\n' "$dest" >&2
-        exit 2
-      fi
+      rflags=("${RS_DIR[@]}" "--exclude-from=$exf")
     fi
-    continue
-  fi
 
-  # --- dry-run: itemize listing + NUL-safe accounting ---------------------
-  itemize="$work/itemize.$idx"
-  if [ "$type" = "file" ]; then
-    if [ -d "$(dirname "$dst")" ]; then
-      if ! rsync "${rflags[@]}" --dry-run --itemize-changes "$src" "$dst" > "$itemize" 2>/dev/null; then
-        printf 'capture: rsync-failed (%s)\n' "$dest" >&2
-        exit 2
-      fi
-    else
-      : > "$itemize"
-      if [ ! -e "$dst" ]; then
-        printf '>f+++++++++ %s\n' "$(basename "$dest")" > "$itemize"
-      fi
-    fi
-  else
-    if ! rsync "${rflags[@]}" --dry-run --itemize-changes "$src/" "$dst/" > "$itemize" 2>/dev/null; then
-      printf 'capture: rsync-failed (%s)\n' "$dest" >&2
-      exit 2
-    fi
-  fi
-
-  added=0
-  changed=0
-  removed=0
-  delta=0
-  # rsync writes informational notes (e.g. "skipping non-regular file") to
-  # stdout alongside the itemize listing. Drift is decided only by real itemize
-  # event lines, whose two leading status characters match [<>ch.*][fdLDS].
-  has_itemize=0
-  if grep -qE '^[<>ch.*][fdLDS]' "$itemize" 2>/dev/null; then
-    has_itemize=1
-  fi
-
-  if [ "$has_itemize" -eq 1 ]; then
+    # --- dry-run: itemize listing + NUL-safe accounting ---------------------
+    itemize="$work/itemize.$idx"
     if [ "$type" = "file" ]; then
-      if [ ! -e "$dst" ]; then
-        added=1
-        delta="$(stat -c %s "$src")"
-      elif cmp -s "$src" "$dst"; then
-        if [ -x "$src" ] && [ ! -x "$dst" ] || [ ! -x "$src" ] && [ -x "$dst" ]; then
-          changed=1
+      if [ -d "$(dirname "$dst")" ]; then
+        if ! rsync "${rflags[@]}" --dry-run --itemize-changes "$src" "$dst" > "$itemize" 2>/dev/null; then
+          printf 'capture: rsync-failed (%s)\n' "$dest" >&2
+          exit 2
         fi
       else
-        changed=1
-        delta=$(( $(stat -c %s "$src") - $(stat -c %s "$dst") ))
+        : > "$itemize"
+        if [ ! -e "$dst" ]; then
+          printf '>f+++++++++ %s\n' "$(basename "$dest")" > "$itemize"
+        fi
       fi
     else
-      stage="$work/stage.$idx"
-      rm -rf "$stage"
-      mkdir -p "$stage"
-      if ! rsync -r -p --no-links --exclude-from="$exf" "$src/" "$stage/" 2>/dev/null; then
-        printf 'capture: stage-failed (%s)\n' "$dest" >&2
+      if ! rsync "${rflags[@]}" --dry-run --itemize-changes "$src/" "$dst/" > "$itemize" 2>/dev/null; then
+        printf 'capture: rsync-failed (%s)\n' "$dest" >&2
         exit 2
       fi
-      vals="$(account_dir "$stage" "$dst")" || {
-        printf 'capture: account-failed (%s)\n' "$dest" >&2
-        exit 2
-      }
-      if [ -z "$vals" ]; then
-        printf 'capture: account-failed (%s)\n' "$dest" >&2
-        exit 2
-      fi
-      read -r added changed removed delta <<< "$vals"
     fi
-  fi
 
-  printf '[entry %s -> %s]\n' "$origin" "$dest"
-  printf 'added=%s changed=%s removed=%s delta=%s\n' "$added" "$changed" "$removed" "$delta"
-  if [ -s "$itemize" ]; then
-    sed 's/^/  /' "$itemize"
-  fi
+    added=0
+    changed=0
+    removed=0
+    delta=0
+    # rsync writes informational notes (e.g. "skipping non-regular file") to
+    # stdout alongside the itemize listing. Drift is decided only by real itemize
+    # event lines, whose two leading status characters match [<>ch.*][fdLDS].
+    has_itemize=0
+    if grep -qE '^[<>ch.*][fdLDS]' "$itemize" 2>/dev/null; then
+      has_itemize=1
+    fi
 
-  if [ "$has_itemize" -eq 1 ] || [ "$added" -ne 0 ] || [ "$changed" -ne 0 ] || [ "$removed" -ne 0 ]; then
-    overall_drift=1
-  fi
-done
+    if [ "$has_itemize" -eq 1 ]; then
+      if [ "$type" = "file" ]; then
+        if [ ! -e "$dst" ]; then
+          added=1
+          delta="$(stat -c %s "$src")"
+        elif cmp -s "$src" "$dst"; then
+          if [ -x "$src" ] && [ ! -x "$dst" ] || [ ! -x "$src" ] && [ -x "$dst" ]; then
+            changed=1
+          fi
+        else
+          changed=1
+          delta=$(( $(stat -c %s "$src") - $(stat -c %s "$dst") ))
+        fi
+      else
+        stage="$work/stage.$idx"
+        rm -rf "$stage"
+        mkdir -p "$stage"
+        if ! rsync -r -p --no-links --exclude-from="$exf" "$src/" "$stage/" 2>/dev/null; then
+          printf 'capture: stage-failed (%s)\n' "$dest" >&2
+          exit 2
+        fi
+        vals="$(account_dir "$stage" "$dst")" || {
+          printf 'capture: account-failed (%s)\n' "$dest" >&2
+          exit 2
+        }
+        if [ -z "$vals" ]; then
+          printf 'capture: account-failed (%s)\n' "$dest" >&2
+          exit 2
+        fi
+        read -r added changed removed delta <<< "$vals"
+      fi
+    fi
 
-# --- exit contract ----------------------------------------------------------
-if [ "$DRY_RUN" -eq 1 ]; then
+    printf '[entry %s -> %s]\n' "$origin" "$dest"
+    printf 'added=%s changed=%s removed=%s delta=%s\n' "$added" "$changed" "$removed" "$delta"
+    if [ -s "$itemize" ]; then
+      sed 's/^/  /' "$itemize"
+    fi
+
+    if [ "$has_itemize" -eq 1 ] || [ "$added" -ne 0 ] || [ "$changed" -ne 0 ] || [ "$removed" -ne 0 ]; then
+      overall_drift=1
+    fi
+  done
+
   if [ "$overall_drift" -eq 0 ]; then
     printf 'DRIFT: none\n'
     exit 0
@@ -416,6 +430,91 @@ if [ "$DRY_RUN" -eq 1 ]; then
   printf 'DRIFT: detected (repo differs from the machine)\n'
   exit 1
 fi
+
+# ================= real capture: stage, scan, promote, re-scan ==============
+printf 'capture: capturing into %s\n' "$repo_root"
+
+candidate_root="$work/candidate"
+mkdir -p "$candidate_root" || {
+  printf 'capture: stage-failed (cannot create candidate workspace)\n' >&2
+  exit 2
+}
+
+# 1. Mirror every validated MANIFEST source into the staged candidate with the
+#    same filters and options as a real capture (D-01/D-03/D-14).
+for ((idx = 0; idx < entry_count; idx++)); do
+  origin="${origins[$idx]}"
+  dest="${dests[$idx]}"
+  type="${types[$idx]}"
+  src="$HOME/$origin"
+  dst="$candidate_root/$dest"
+  exf="$work/excludes.$idx"
+
+  if [ "$type" = "file" ]; then
+    mkdir -p "$(dirname "$dst")"
+    if ! rsync "${RS_FILE[@]}" "--exclude-from=$exf" "$src" "$dst"; then
+      printf 'capture: rsync-failed (%s)\n' "$dest" >&2
+      exit 2
+    fi
+  else
+    mkdir -p "$dst"
+    if ! rsync "${RS_DIR[@]}" "--exclude-from=$exf" "$src/" "$dst/"; then
+      printf 'capture: rsync-failed (%s)\n' "$dest" >&2
+      exit 2
+    fi
+  fi
+done
+
+# 2. Pre-scan the exact staged bytes (post-exclusion, including Git-ignored
+#    files) before touching the live repo home/ (D-03). Any finding or scan
+#    error aborts with the live home/ left byte-for-byte unchanged.
+pre_ok=1
+SECRET_SCAN_BLOCKED=0
+if ! secret_scan_tree "$candidate_root/home"; then pre_ok=0; fi
+if [ "$SECRET_SCAN_BLOCKED" -ne 0 ]; then pre_ok=0; fi
+if ! bash "$scanner" --tree "$candidate_root/home"; then pre_ok=0; fi
+if [ "$pre_ok" -ne 1 ]; then
+  printf 'capture: pre-scan-blocked (D-03) — finding or scan error; live home/ left unchanged\n' >&2
+  exit 1
+fi
+printf 'capture: pre-scan passed — tested detector coverage: 5 secret rules + 2 path families\n'
+
+# 3. Promote ONLY the scanned candidate bytes. Snapshot the prior home/ first so
+#    a later post-scan or promotion failure can restore it exactly (T-02-12).
+prev_home="$work/prev-home"
+had_prev=0
+if [ -e "$repo_root/home" ]; then
+  if ! mv -- "$repo_root/home" "$prev_home"; then
+    printf 'capture: promote-failed (cannot snapshot prior home/)\n' >&2
+    exit 2
+  fi
+  had_prev=1
+fi
+
+restore_prev_home() {
+  if [ -e "$repo_root/home" ]; then rm -rf -- "$repo_root/home"; fi
+  if [ "$had_prev" -eq 1 ] && [ -e "$prev_home" ]; then mv -- "$prev_home" "$repo_root/home"; fi
+}
+
+if ! mv -- "$candidate_root/home" "$repo_root/home"; then
+  restore_prev_home
+  printf 'capture: promote-failed (cannot publish scanned candidate; prior home/ restored)\n' >&2
+  exit 2
+fi
+
+# 4. Post-copy re-scan of the physical published home/ (D-04). Any finding or
+#    scan error rejects the published payload and restores the prior tree.
+post_ok=1
+SECRET_SCAN_BLOCKED=0
+if ! secret_scan_tree "$repo_root/home"; then post_ok=0; fi
+if [ "$SECRET_SCAN_BLOCKED" -ne 0 ]; then post_ok=0; fi
+if ! bash "$scanner" --tree "$repo_root/home"; then post_ok=0; fi
+if [ "$post_ok" -ne 1 ]; then
+  restore_prev_home
+  printf 'capture: post-scan-blocked (D-04) — rejected published payload; prior home/ restored\n' >&2
+  exit 1
+fi
+printf 'capture: post-scan passed — tested detector coverage: 5 secret rules + 2 path families\n'
 
 printf 'capture: wrote payload only (D-09) — review git status, then commit and push\n'
 exit 0

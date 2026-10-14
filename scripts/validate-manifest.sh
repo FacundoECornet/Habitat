@@ -90,7 +90,7 @@ const ALLOWLIST = new Map([
 const REQUIRED_EXCLUDES = [
   'node_modules/', 'bin/', '*.tar.gz', '*.tgz', '*.tar', '*.zip', '*.bak*',
   'opencode-backup/', 'opencode-backup-*.tar.gz', 'agents.bak-*',
-  'jev.env', '.git-credentials', '.claude.json', '*.local'
+  'jev.env', '.git-credentials', '.claude.json', '.git/', '*.local'
 ];
 
 const ENTRY_KEYS = ['origin', 'dest', 'mode', 'excludes', 'post_steps'];

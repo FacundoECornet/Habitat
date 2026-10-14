@@ -45,6 +45,9 @@ build/
 legacy-archive/
 .opencode-ecosystem-backup/
 
+# --- nested Git metadata (never versioned under home/) ---
+**/.git/
+
 # --- machine-local (never overwritten by restore, never committed) ---
 **/*.local
 home/.azure
