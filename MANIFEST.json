@@ -27,7 +27,7 @@
         "*.db-shm",
         "context-mode/sessions/",
         "gsd-router.backup/",
-        "gsd-router/backup-*"
+        "backup-*"
       ],
       "post_steps": ["npm ci"]
     },
