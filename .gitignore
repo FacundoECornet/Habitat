@@ -52,5 +52,15 @@ legacy-archive/
 **/*.local
 home/.azure
 
+# --- machine-local runtime data (backstop for MANIFEST excludes) ---
+# context-mode session stores and any SQLite database/sidecar are runtime state,
+# not managed config; the matching MANIFEST.json excludes drive capture/restore.
+**/context-mode/sessions/
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/gsd-router.backup/
+**/gsd-router/backup-*
+
 # --- GSD ephemeral ---
 .planning/.gsd-state-tmp/

@@ -50,6 +50,8 @@
 set -u
 set -o pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # --- detector expressions assembled from fragments --------------------------
 # Neither family is written as a complete literal, so scanning this script's own
 # source cannot self-match the detector.
@@ -73,6 +75,12 @@ F_SUM='summary.md'
 REEN_HOME="${F_SLASH}${F_HOME}${F_SLASH}${F_NEVER}"
 REEN_WIN="${F_SLASH}${F_MNT}${F_SLASH}${F_C}${F_SLASH}${F_USERS}(/[^[:space:]]*)?"
 
+# Normalization for the exact-path + exact-full-line allowlist table: collapse
+# the single machine home root to the literal sentinel <HOME>, exactly as the
+# data file stores it. Built from fragments so this source never carries a
+# complete machine-bound literal (and therefore never self-matches).
+NORM_SED="s#${F_SLASH}${F_HOME}${F_SLASH}${F_NEVER}#<HOME>#g"
+
 RULE_NAMES=( 'home-absolute-path' 'windows-user-path' )
 RULE_ERES=( "$REEN_HOME" "$REEN_WIN" )
 
@@ -92,8 +100,31 @@ CANON_D13="- **D-13:** Absolute-path scan is fail-closed: \`grep -rEn\` over ver
 EXEC_REF_WF="${F_AT}${F_SLASH}${F_HOME}${F_SLASH}${F_USER}${F_SLASH}${F_CFG}${F_SLASH}${F_OC}${F_SLASH}${F_GSD}${F_SLASH}${F_WFD}${F_SLASH}${F_EXEC}"
 EXEC_REF_TPL="${F_AT}${F_SLASH}${F_HOME}${F_SLASH}${F_USER}${F_SLASH}${F_CFG}${F_SLASH}${F_OC}${F_SLASH}${F_GSD}${F_SLASH}${F_TPL}${F_SLASH}${F_SUM}"
 
+# --- exact-path + exact-full-line payload allowlist -------------------------
+# The captured GSD/managed payload legitimately contains references to its own
+# install root (product content that names the machine home). Such a line is
+# exempt ONLY when both its payload-relative path AND its complete line match an
+# entry in scripts/path-leak-allowlist.tsv, after normalizing the single machine
+# home root to the literal sentinel <HOME>. There are no wildcard, directory, or
+# extension exemptions: lookups are exact string equality over the pair.
+# A missing data file is non-fatal — the table is simply empty, which can only
+# make the scan stricter (more lines block), never more permissive.
+ALLOWLIST_FILE="$script_dir/path-leak-allowlist.tsv"
+declare -A ALLOW_EXACT=()
+load_exact_allowlist() {
+  [ -f "$ALLOWLIST_FILE" ] || return 0
+  local p t
+  while IFS=$'\t' read -r p t || [ -n "$p" ]; do
+    case "$p" in ''|\#*) continue ;; esac
+    [ -n "$t" ] || continue
+    ALLOW_EXACT["$p"$'\x1f'"$t"]=1
+  done < "$ALLOWLIST_FILE"
+  return 0
+}
+load_exact_allowlist
+
 allowlist_check() {
-  local path="$1" text="$2"
+  local path="$1" text="$2" rel norm
   case "$path" in
     .planning/phases/01-inventory-exclusions-manifest/01-CONTEXT.md|\
     .planning/phases/01-inventory-exclusions-manifest/01-RESEARCH.md)
@@ -120,6 +151,10 @@ allowlist_check() {
       [ "$text" = "$EXEC_REF_TPL" ] && return 0
       ;;
   esac
+  # exact-path + exact-full-line payload table (home root normalized to <HOME>)
+  rel="${path#home/}"
+  norm="$(printf '%s' "$text" | sed -E "$NORM_SED" 2>/dev/null)"
+  [ -n "${ALLOW_EXACT["$rel"$'\x1f'"$norm"]:-}" ] && return 0
   return 1
 }
 

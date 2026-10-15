@@ -21,7 +21,13 @@
         ".git-credentials",
         ".claude.json",
         ".git/",
-        "*.local"
+        "*.local",
+        "*.db",
+        "*.db-wal",
+        "*.db-shm",
+        "context-mode/sessions/",
+        "gsd-router.backup/",
+        "gsd-router/backup-*"
       ],
       "post_steps": ["npm ci"]
     },
@@ -45,6 +51,9 @@
         ".claude.json",
         ".git/",
         "*.local",
+        "*.db",
+        "*.db-wal",
+        "*.db-shm",
         "archify"
       ],
       "post_steps": []
@@ -68,7 +77,10 @@
         ".git-credentials",
         ".claude.json",
         ".git/",
-        "*.local"
+        "*.local",
+        "*.db",
+        "*.db-wal",
+        "*.db-shm"
       ],
       "post_steps": []
     },
@@ -91,7 +103,10 @@
         ".git-credentials",
         ".claude.json",
         ".git/",
-        "*.local"
+        "*.local",
+        "*.db",
+        "*.db-wal",
+        "*.db-shm"
       ],
       "post_steps": []
     },
@@ -114,7 +129,10 @@
         ".git-credentials",
         ".claude.json",
         ".git/",
-        "*.local"
+        "*.local",
+        "*.db",
+        "*.db-wal",
+        "*.db-shm"
       ],
       "post_steps": ["npm ci"]
     },
@@ -137,7 +155,10 @@
         ".git-credentials",
         ".claude.json",
         ".git/",
-        "*.local"
+        "*.local",
+        "*.db",
+        "*.db-wal",
+        "*.db-shm"
       ],
       "post_steps": []
     },
@@ -160,7 +181,10 @@
         ".git-credentials",
         ".claude.json",
         ".git/",
-        "*.local"
+        "*.local",
+        "*.db",
+        "*.db-wal",
+        "*.db-shm"
       ],
       "post_steps": []
     },
@@ -183,7 +207,10 @@
         ".git-credentials",
         ".claude.json",
         ".git/",
-        "*.local"
+        "*.local",
+        "*.db",
+        "*.db-wal",
+        "*.db-shm"
       ],
       "post_steps": []
     }

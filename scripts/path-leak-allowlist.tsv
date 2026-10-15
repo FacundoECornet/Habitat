@@ -1,0 +1,412 @@
+# path-leak-allowlist.tsv — exact-path + exact-full-line exemptions (D-13)
+#
+# Machine-readable allowlist consumed by scripts/check-path-leaks.sh.
+# Each non-comment entry is: <payload-relative-path> <TAB> <full-line>
+# The single machine home root inside the line is stored as the literal
+# sentinel <HOME>; the scanner normalizes the same token before comparing.
+# No globs, no directory or extension exemptions: a lookup requires BOTH an
+# exact path and an exact full-line match.
+#
+# Generated from a live capture findings pass over the eight MANIFEST
+# roots; context-mode runtime sessions and gsd-router backup dirs are
+# excluded by MANIFEST.json instead of allowlisted.
+#
+.bashrc	export PATH=<HOME>/.opencode/bin:$PATH
+.config/opencode/agents/gsd-ai-researcher.md	Read `<HOME>/.config/opencode/get-shit-done/references/ai-frameworks.md` for framework profiles and known pitfalls before fetching docs.
+.config/opencode/agents/gsd-debugger.md	                  configDir = <HOME>/.config/opencode
+.config/opencode/agents/gsd-debugger.md	                  targetDir = <HOME>/.config/opencode/get-shit-done
+.config/opencode/agents/gsd-debugger.md	                  → checks <HOME>/.config/opencode/hooks/
+.config/opencode/agents/gsd-debugger.md	                  → writes to <HOME>/.config/opencode/get-shit-done/hooks/
+.config/opencode/agents/gsd-debugger.md	**Project skills:** @<HOME>/.config/opencode/get-shit-done/references/project-skills-discovery.md
+.config/opencode/agents/gsd-debugger.md	- Read @<HOME>/.config/opencode/get-shit-done/references/common-bug-patterns.md
+.config/opencode/agents/gsd-debugger.md	@<HOME>/.config/opencode/get-shit-done/references/common-bug-patterns.md
+.config/opencode/agents/gsd-debugger.md	@<HOME>/.config/opencode/get-shit-done/references/debugger-philosophy.md
+.config/opencode/agents/gsd-debugger.md	@<HOME>/.config/opencode/get-shit-done/references/mandatory-initial-read.md
+.config/opencode/agents/gsd-debugger.md	@<HOME>/.config/opencode/get-shit-done/references/thinking-models-debug.md
+.config/opencode/agents/gsd-domain-researcher.md	Read `<HOME>/.config/opencode/get-shit-done/references/ai-evals.md` — specifically the rubric design and domain expert sections.
+.config/opencode/agents/gsd-eval-auditor.md	Read `<HOME>/.config/opencode/get-shit-done/references/ai-evals.md` before auditing. This is your scoring framework.
+.config/opencode/agents/gsd-eval-planner.md	Read `<HOME>/.config/opencode/get-shit-done/references/ai-evals.md` before planning. This is your evaluation framework.
+.config/opencode/agents/gsd-executor.md	**Project skills:** @<HOME>/.config/opencode/get-shit-done/references/project-skills-discovery.md
+.config/opencode/agents/gsd-executor.md	**See @<HOME>/.config/opencode/get-shit-done/references/checkpoints.md**
+.config/opencode/agents/gsd-executor.md	**Use template:** @<HOME>/.config/opencode/get-shit-done/templates/summary.md
+.config/opencode/agents/gsd-executor.md	**When the orchestrator passes both `MVP_MODE=true` and `TDD_MODE=true`:** Before running the implementation step of any task with `tdd="true"`, run the runtime gate from `@<HOME>/.config/opencode/get-shit-done/references/execute-mvp-tdd.md`. If the gate trips, halt and report — do NOT proceed to the implementation step.
+.config/opencode/agents/gsd-executor.md	@<HOME>/.config/opencode/get-shit-done/references/executor-examples.md
+.config/opencode/agents/gsd-executor.md	@<HOME>/.config/opencode/get-shit-done/references/ios-scaffold.md
+.config/opencode/agents/gsd-executor.md	@<HOME>/.config/opencode/get-shit-done/references/mandatory-initial-read.md
+.config/opencode/agents/gsd-executor.md	@<HOME>/.config/opencode/get-shit-done/references/thinking-models-execution.md
+.config/opencode/agents/gsd-executor.md.backup-routing	**Project skills:** @<HOME>/.config/opencode/get-shit-done/references/project-skills-discovery.md
+.config/opencode/agents/gsd-executor.md.backup-routing	**See @<HOME>/.config/opencode/get-shit-done/references/checkpoints.md**
+.config/opencode/agents/gsd-executor.md.backup-routing	**Use template:** @<HOME>/.config/opencode/get-shit-done/templates/summary.md
+.config/opencode/agents/gsd-executor.md.backup-routing	**When the orchestrator passes both `MVP_MODE=true` and `TDD_MODE=true`:** Before running the implementation step of any task with `tdd="true"`, run the runtime gate from `@<HOME>/.config/opencode/get-shit-done/references/execute-mvp-tdd.md`. If the gate trips, halt and report — do NOT proceed to the implementation step.
+.config/opencode/agents/gsd-executor.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/executor-examples.md
+.config/opencode/agents/gsd-executor.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/ios-scaffold.md
+.config/opencode/agents/gsd-executor.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/mandatory-initial-read.md
+.config/opencode/agents/gsd-executor.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/thinking-models-execution.md
+.config/opencode/agents/gsd-framework-selector.md	Read `<HOME>/.config/opencode/get-shit-done/references/ai-frameworks.md` before asking questions. This is your decision matrix.
+.config/opencode/agents/gsd-phase-researcher.md	**Project skills:** @<HOME>/.config/opencode/get-shit-done/references/project-skills-discovery.md
+.config/opencode/agents/gsd-phase-researcher.md	@<HOME>/.config/opencode/get-shit-done/references/mandatory-initial-read.md
+.config/opencode/agents/gsd-phase-researcher.md	@<HOME>/.config/opencode/get-shit-done/references/thinking-models-research.md
+.config/opencode/agents/gsd-phase-researcher.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify query "<capability-keyword>" --budget 1500
+.config/opencode/agents/gsd-phase-researcher.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify status
+.config/opencode/agents/gsd-plan-checker.md	@<HOME>/.config/opencode/get-shit-done/references/few-shot-examples/plan-checker.md
+.config/opencode/agents/gsd-plan-checker.md	@<HOME>/.config/opencode/get-shit-done/references/gates.md
+.config/opencode/agents/gsd-plan-checker.md	@<HOME>/.config/opencode/get-shit-done/references/thinking-models-planning.md
+.config/opencode/agents/gsd-planner.md	   Format rules from `@<HOME>/.config/opencode/get-shit-done/references/user-story-template.md`:
+.config/opencode/agents/gsd-planner.md	**Project skills:** @<HOME>/.config/opencode/get-shit-done/references/project-skills-discovery.md
+.config/opencode/agents/gsd-planner.md	**Test:** Could a different the agent instance execute without asking clarifying questions? If not, add specificity. See @<HOME>/.config/opencode/get-shit-done/references/planner-antipatterns.md for vague-vs-specific comparison table.
+.config/opencode/agents/gsd-planner.md	**Walking Skeleton mode** (`WALKING_SKELETON=true`, set by orchestrator for Phase 1 + new project under `--mvp`): The first deliverable is a Walking Skeleton — the thinnest possible end-to-end stack. In addition to `PLAN.md`, produce `SKELETON.md` using the template at `@<HOME>/.config/opencode/get-shit-done/references/skeleton-template.md`. `SKELETON.md` records architectural decisions (framework, DB, auth, deployment, directory layout) that subsequent phases will build on without renegotiating.
+.config/opencode/agents/gsd-planner.md	**When `MVP_MODE` is enabled (passed by the plan-phase orchestrator):** Decompose tasks as **vertical feature slices**, not horizontal layers. Required reading: `@<HOME>/.config/opencode/get-shit-done/references/planner-mvp-mode.md` (loaded conditionally by the orchestrator).
+.config/opencode/agents/gsd-planner.md	**When `workflow.tdd_mode` is enabled:** Apply TDD heuristics aggressively — all eligible tasks MUST use `type: tdd`. Read @<HOME>/.config/opencode/get-shit-done/references/tdd.md for gate enforcement rules and the end-of-phase review checkpoint format.
+.config/opencode/agents/gsd-planner.md	@<HOME>/.config/opencode/get-shit-done/references/mandatory-initial-read.md
+.config/opencode/agents/gsd-planner.md	@<HOME>/.config/opencode/get-shit-done/references/planner-antipatterns.md
+.config/opencode/agents/gsd-planner.md	@<HOME>/.config/opencode/get-shit-done/references/planner-source-audit.md for constraint examples.
+.config/opencode/agents/gsd-planner.md	@<HOME>/.config/opencode/get-shit-done/references/planner-source-audit.md for full format, examples, and gap-handling rules.
+.config/opencode/agents/gsd-planner.md	@<HOME>/.config/opencode/get-shit-done/references/thinking-models-planning.md
+.config/opencode/agents/gsd-planner.md	@<HOME>/.config/opencode/get-shit-done/templates/summary.md
+.config/opencode/agents/gsd-planner.md	@<HOME>/.config/opencode/get-shit-done/workflows/execute-plan.md
+.config/opencode/agents/gsd-planner.md	See @<HOME>/.config/opencode/get-shit-done/references/planner-chunked.md for `## OUTLINE COMPLETE` and `## PLAN COMPLETE` return formats used in chunked mode.
+.config/opencode/agents/gsd-planner.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify query "<phase-goal-keyword>" --budget 2000
+.config/opencode/agents/gsd-planner.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify status
+.config/opencode/agents/gsd-planner.md.backup-routing	   Format rules from `@<HOME>/.config/opencode/get-shit-done/references/user-story-template.md`:
+.config/opencode/agents/gsd-planner.md.backup-routing	**Project skills:** @<HOME>/.config/opencode/get-shit-done/references/project-skills-discovery.md
+.config/opencode/agents/gsd-planner.md.backup-routing	**Test:** Could a different the agent instance execute without asking clarifying questions? If not, add specificity. See @<HOME>/.config/opencode/get-shit-done/references/planner-antipatterns.md for vague-vs-specific comparison table.
+.config/opencode/agents/gsd-planner.md.backup-routing	**Walking Skeleton mode** (`WALKING_SKELETON=true`, set by orchestrator for Phase 1 + new project under `--mvp`): The first deliverable is a Walking Skeleton — the thinnest possible end-to-end stack. In addition to `PLAN.md`, produce `SKELETON.md` using the template at `@<HOME>/.config/opencode/get-shit-done/references/skeleton-template.md`. `SKELETON.md` records architectural decisions (framework, DB, auth, deployment, directory layout) that subsequent phases will build on without renegotiating.
+.config/opencode/agents/gsd-planner.md.backup-routing	**When `MVP_MODE` is enabled (passed by the plan-phase orchestrator):** Decompose tasks as **vertical feature slices**, not horizontal layers. Required reading: `@<HOME>/.config/opencode/get-shit-done/references/planner-mvp-mode.md` (loaded conditionally by the orchestrator).
+.config/opencode/agents/gsd-planner.md.backup-routing	**When `workflow.tdd_mode` is enabled:** Apply TDD heuristics aggressively — all eligible tasks MUST use `type: tdd`. Read @<HOME>/.config/opencode/get-shit-done/references/tdd.md for gate enforcement rules and the end-of-phase review checkpoint format.
+.config/opencode/agents/gsd-planner.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/mandatory-initial-read.md
+.config/opencode/agents/gsd-planner.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/planner-antipatterns.md
+.config/opencode/agents/gsd-planner.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/planner-source-audit.md for constraint examples.
+.config/opencode/agents/gsd-planner.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/planner-source-audit.md for full format, examples, and gap-handling rules.
+.config/opencode/agents/gsd-planner.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/thinking-models-planning.md
+.config/opencode/agents/gsd-planner.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/templates/summary.md
+.config/opencode/agents/gsd-planner.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/workflows/execute-plan.md
+.config/opencode/agents/gsd-planner.md.backup-routing	See @<HOME>/.config/opencode/get-shit-done/references/planner-chunked.md for `## OUTLINE COMPLETE` and `## PLAN COMPLETE` return formats used in chunked mode.
+.config/opencode/agents/gsd-planner.md.backup-routing	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify query "<phase-goal-keyword>" --budget 2000
+.config/opencode/agents/gsd-planner.md.backup-routing	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify status
+.config/opencode/agents/gsd-research-synthesizer.md	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/SUMMARY.md
+.config/opencode/agents/gsd-roadmapper.md	Reference full template: `<HOME>/.config/opencode/get-shit-done/templates/roadmap.md`
+.config/opencode/agents/gsd-roadmapper.md	Use template from `<HOME>/.config/opencode/get-shit-done/templates/state.md`.
+.config/opencode/agents/gsd-ui-researcher.md	Read template: `<HOME>/.config/opencode/get-shit-done/templates/UI-SPEC.md`
+.config/opencode/agents/gsd-ui-researcher.md	Use template from `<HOME>/.config/opencode/get-shit-done/templates/UI-SPEC.md`.
+.config/opencode/agents/gsd-user-profiler.md	- Full absolute file paths containing usernames (e.g., `/Users/john/`, `<HOME>/`)
+.config/opencode/agents/gsd-user-profiler.md	@<HOME>/.config/opencode/get-shit-done/references/user-profiling.md
+.config/opencode/agents/gsd-user-profiler.md	Read the user-profiling reference document at `<HOME>/.config/opencode/get-shit-done/references/user-profiling.md` to load:
+.config/opencode/agents/gsd-verifier.md	**Project skills:** @<HOME>/.config/opencode/get-shit-done/references/project-skills-discovery.md
+.config/opencode/agents/gsd-verifier.md	**When the phase under verification has `mode: mvp` in ROADMAP.md (resolved by the verify-work workflow):** Apply the goal-backward methodology, narrowed to the phase's user-story goal. Required reading: `@<HOME>/.config/opencode/get-shit-done/references/verify-mvp-mode.md`.
+.config/opencode/agents/gsd-verifier.md	@<HOME>/.config/opencode/get-shit-done/references/few-shot-examples/verifier.md
+.config/opencode/agents/gsd-verifier.md	@<HOME>/.config/opencode/get-shit-done/references/gates.md
+.config/opencode/agents/gsd-verifier.md	@<HOME>/.config/opencode/get-shit-done/references/mandatory-initial-read.md
+.config/opencode/agents/gsd-verifier.md	@<HOME>/.config/opencode/get-shit-done/references/thinking-models-verification.md
+.config/opencode/agents/gsd-verifier.md	@<HOME>/.config/opencode/get-shit-done/references/verification-overrides.md
+.config/opencode/agents/gsd-verifier.md.backup-routing	**Project skills:** @<HOME>/.config/opencode/get-shit-done/references/project-skills-discovery.md
+.config/opencode/agents/gsd-verifier.md.backup-routing	**When the phase under verification has `mode: mvp` in ROADMAP.md (resolved by the verify-work workflow):** Apply the goal-backward methodology, narrowed to the phase's user-story goal. Required reading: `@<HOME>/.config/opencode/get-shit-done/references/verify-mvp-mode.md`.
+.config/opencode/agents/gsd-verifier.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/few-shot-examples/verifier.md
+.config/opencode/agents/gsd-verifier.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/gates.md
+.config/opencode/agents/gsd-verifier.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/mandatory-initial-read.md
+.config/opencode/agents/gsd-verifier.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/thinking-models-verification.md
+.config/opencode/agents/gsd-verifier.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/references/verification-overrides.md
+.config/opencode/command/gsd-add-tests.md	@<HOME>/.config/opencode/get-shit-done/workflows/add-tests.md
+.config/opencode/command/gsd-ai-integration-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ai-evals.md
+.config/opencode/command/gsd-ai-integration-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ai-frameworks.md
+.config/opencode/command/gsd-ai-integration-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/ai-integration-phase.md
+.config/opencode/command/gsd-audit-fix.md	@<HOME>/.config/opencode/get-shit-done/workflows/audit-fix.md
+.config/opencode/command/gsd-audit-milestone.md	@<HOME>/.config/opencode/get-shit-done/workflows/audit-milestone.md
+.config/opencode/command/gsd-audit-uat.md	@<HOME>/.config/opencode/get-shit-done/workflows/audit-uat.md
+.config/opencode/command/gsd-autonomous.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-autonomous.md	@<HOME>/.config/opencode/get-shit-done/workflows/autonomous.md
+.config/opencode/command/gsd-capture.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-capture.md	@<HOME>/.config/opencode/get-shit-done/workflows/add-backlog.md
+.config/opencode/command/gsd-capture.md	@<HOME>/.config/opencode/get-shit-done/workflows/add-todo.md
+.config/opencode/command/gsd-capture.md	@<HOME>/.config/opencode/get-shit-done/workflows/check-todos.md
+.config/opencode/command/gsd-capture.md	@<HOME>/.config/opencode/get-shit-done/workflows/note.md
+.config/opencode/command/gsd-capture.md	@<HOME>/.config/opencode/get-shit-done/workflows/plant-seed.md
+.config/opencode/command/gsd-cleanup.md	@<HOME>/.config/opencode/get-shit-done/workflows/cleanup.md
+.config/opencode/command/gsd-code-review.md	@<HOME>/.config/opencode/get-shit-done/workflows/code-review.md
+.config/opencode/command/gsd-complete-milestone.md	- @<HOME>/.config/opencode/get-shit-done/templates/milestone-archive.md (archive template)
+.config/opencode/command/gsd-complete-milestone.md	- @<HOME>/.config/opencode/get-shit-done/workflows/complete-milestone.md (main workflow)
+.config/opencode/command/gsd-config.md	@<HOME>/.config/opencode/get-shit-done/workflows/settings-advanced.md
+.config/opencode/command/gsd-config.md	@<HOME>/.config/opencode/get-shit-done/workflows/settings-integrations.md
+.config/opencode/command/gsd-config.md	@<HOME>/.config/opencode/get-shit-done/workflows/settings.md
+.config/opencode/command/gsd-debug.md	@<HOME>/.config/opencode/get-shit-done/workflows/debug.md
+.config/opencode/command/gsd-discuss-phase.md	Read and execute `<HOME>/.config/opencode/get-shit-done/workflows/discuss-phase-assumptions.md` end-to-end.
+.config/opencode/command/gsd-discuss-phase.md	Read and execute `<HOME>/.config/opencode/get-shit-done/workflows/discuss-phase.md` end-to-end.
+.config/opencode/command/gsd-discuss-phase.md	Read and execute `<HOME>/.config/opencode/get-shit-done/workflows/list-phase-assumptions.md` end-to-end.
+.config/opencode/command/gsd-docs-update.md	@<HOME>/.config/opencode/get-shit-done/workflows/docs-update.md
+.config/opencode/command/gsd-eval-review.md	@<HOME>/.config/opencode/get-shit-done/references/ai-evals.md
+.config/opencode/command/gsd-eval-review.md	@<HOME>/.config/opencode/get-shit-done/workflows/eval-review.md
+.config/opencode/command/gsd-execute-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-execute-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/execute-phase.md
+.config/opencode/command/gsd-explore.md	@<HOME>/.config/opencode/get-shit-done/workflows/explore.md
+.config/opencode/command/gsd-extract-learnings.md	@<HOME>/.config/opencode/get-shit-done/workflows/extract-learnings.md
+.config/opencode/command/gsd-extract-learnings.md	Execute the extract-learnings workflow from @<HOME>/.config/opencode/get-shit-done/workflows/extract-learnings.md end-to-end.
+.config/opencode/command/gsd-fast.md	@<HOME>/.config/opencode/get-shit-done/workflows/fast.md
+.config/opencode/command/gsd-forensics.md	@<HOME>/.config/opencode/get-shit-done/workflows/forensics.md
+.config/opencode/command/gsd-graphify.md	  && node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify build snapshot \
+.config/opencode/command/gsd-graphify.md	  && node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify status
+.config/opencode/command/gsd-graphify.md	  node <HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs config-set graphify.enabled true
+.config/opencode/command/gsd-graphify.md	**CJS-only (graphify):** `graphify` subcommands are not registered on `gsd-sdk query`. Use `node <HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs graphify …` as documented in this command and in `docs/CLI-TOOLS.md`. Other tooling may still use `gsd-sdk query` where a handler exists.
+.config/opencode/command/gsd-graphify.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify build
+.config/opencode/command/gsd-graphify.md	node <HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs graphify diff
+.config/opencode/command/gsd-graphify.md	node <HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs graphify query <term>
+.config/opencode/command/gsd-graphify.md	node <HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs graphify status
+.config/opencode/command/gsd-health.md	@<HOME>/.config/opencode/get-shit-done/workflows/health.md
+.config/opencode/command/gsd-help.md	@<HOME>/.config/opencode/get-shit-done/workflows/help.md
+.config/opencode/command/gsd-import.md	@<HOME>/.config/opencode/get-shit-done/references/doc-conflict-engine.md
+.config/opencode/command/gsd-import.md	@<HOME>/.config/opencode/get-shit-done/references/gate-prompts.md
+.config/opencode/command/gsd-import.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-import.md	@<HOME>/.config/opencode/get-shit-done/workflows/import.md
+.config/opencode/command/gsd-import.md	Run: `node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" from-gsd2`
+.config/opencode/command/gsd-inbox.md	@<HOME>/.config/opencode/get-shit-done/workflows/inbox.md
+.config/opencode/command/gsd-ingest-docs.md	@<HOME>/.config/opencode/get-shit-done/references/doc-conflict-engine.md
+.config/opencode/command/gsd-ingest-docs.md	@<HOME>/.config/opencode/get-shit-done/references/gate-prompts.md
+.config/opencode/command/gsd-ingest-docs.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-ingest-docs.md	@<HOME>/.config/opencode/get-shit-done/workflows/ingest-docs.md
+.config/opencode/command/gsd-manager.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-manager.md	@<HOME>/.config/opencode/get-shit-done/workflows/manager.md
+.config/opencode/command/gsd-manager.md	Read and execute `<HOME>/.config/opencode/get-shit-done/workflows/analyze-dependencies.md` end-to-end.
+.config/opencode/command/gsd-map-codebase.md	@<HOME>/.config/opencode/get-shit-done/workflows/map-codebase.md
+.config/opencode/command/gsd-milestone-summary.md	@<HOME>/.config/opencode/get-shit-done/workflows/milestone-summary.md
+.config/opencode/command/gsd-mvp-phase.md	@<HOME>/.config/opencode/get-shit-done/references/spidr-splitting.md
+.config/opencode/command/gsd-mvp-phase.md	@<HOME>/.config/opencode/get-shit-done/references/user-story-template.md
+.config/opencode/command/gsd-mvp-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/mvp-phase.md
+.config/opencode/command/gsd-mvp-phase.md	Execute the mvp-phase workflow from @<HOME>/.config/opencode/get-shit-done/workflows/mvp-phase.md end-to-end.
+.config/opencode/command/gsd-new-milestone.md	@<HOME>/.config/opencode/get-shit-done/references/questioning.md
+.config/opencode/command/gsd-new-milestone.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-new-milestone.md	@<HOME>/.config/opencode/get-shit-done/templates/project.md
+.config/opencode/command/gsd-new-milestone.md	@<HOME>/.config/opencode/get-shit-done/templates/requirements.md
+.config/opencode/command/gsd-new-milestone.md	@<HOME>/.config/opencode/get-shit-done/workflows/new-milestone.md
+.config/opencode/command/gsd-new-project.md	@<HOME>/.config/opencode/get-shit-done/references/questioning.md
+.config/opencode/command/gsd-new-project.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-new-project.md	@<HOME>/.config/opencode/get-shit-done/templates/project.md
+.config/opencode/command/gsd-new-project.md	@<HOME>/.config/opencode/get-shit-done/templates/requirements.md
+.config/opencode/command/gsd-new-project.md	@<HOME>/.config/opencode/get-shit-done/workflows/new-project.md
+.config/opencode/command/gsd-pause-work.md	@<HOME>/.config/opencode/get-shit-done/workflows/pause-work.md
+.config/opencode/command/gsd-pause-work.md	Read and execute `<HOME>/.config/opencode/get-shit-done/workflows/session-report.md` end-to-end.
+.config/opencode/command/gsd-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/add-phase.md
+.config/opencode/command/gsd-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/edit-phase.md
+.config/opencode/command/gsd-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/insert-phase.md
+.config/opencode/command/gsd-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/remove-phase.md
+.config/opencode/command/gsd-plan-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-plan-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/plan-phase.md
+.config/opencode/command/gsd-plan-review-convergence.md	@<HOME>/.config/opencode/get-shit-done/references/agent-contracts.md
+.config/opencode/command/gsd-plan-review-convergence.md	@<HOME>/.config/opencode/get-shit-done/references/gates.md
+.config/opencode/command/gsd-plan-review-convergence.md	@<HOME>/.config/opencode/get-shit-done/references/revision-loop.md
+.config/opencode/command/gsd-plan-review-convergence.md	@<HOME>/.config/opencode/get-shit-done/workflows/plan-review-convergence.md
+.config/opencode/command/gsd-pr-branch.md	@<HOME>/.config/opencode/get-shit-done/workflows/pr-branch.md
+.config/opencode/command/gsd-profile-user.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-profile-user.md	@<HOME>/.config/opencode/get-shit-done/workflows/profile-user.md
+.config/opencode/command/gsd-progress.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-progress.md	@<HOME>/.config/opencode/get-shit-done/workflows/do.md
+.config/opencode/command/gsd-progress.md	@<HOME>/.config/opencode/get-shit-done/workflows/next.md
+.config/opencode/command/gsd-progress.md	@<HOME>/.config/opencode/get-shit-done/workflows/progress.md
+.config/opencode/command/gsd-quick.md	@<HOME>/.config/opencode/get-shit-done/workflows/quick.md
+.config/opencode/command/gsd-resume-work.md	@<HOME>/.config/opencode/get-shit-done/workflows/resume-project.md
+.config/opencode/command/gsd-review.md	@<HOME>/.config/opencode/get-shit-done/workflows/review.md
+.config/opencode/command/gsd-secure-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/secure-phase.md
+.config/opencode/command/gsd-settings.md	@<HOME>/.config/opencode/get-shit-done/workflows/settings.md
+.config/opencode/command/gsd-ship.md	@<HOME>/.config/opencode/get-shit-done/workflows/ship.md
+.config/opencode/command/gsd-ship.md	Execute the ship workflow from @<HOME>/.config/opencode/get-shit-done/workflows/ship.md end-to-end.
+.config/opencode/command/gsd-sketch.md	@<HOME>/.config/opencode/get-shit-done/references/sketch-interactivity.md
+.config/opencode/command/gsd-sketch.md	@<HOME>/.config/opencode/get-shit-done/references/sketch-theme-system.md
+.config/opencode/command/gsd-sketch.md	@<HOME>/.config/opencode/get-shit-done/references/sketch-tooling.md
+.config/opencode/command/gsd-sketch.md	@<HOME>/.config/opencode/get-shit-done/references/sketch-variant-patterns.md
+.config/opencode/command/gsd-sketch.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-sketch.md	@<HOME>/.config/opencode/get-shit-done/workflows/sketch-wrap-up.md
+.config/opencode/command/gsd-sketch.md	@<HOME>/.config/opencode/get-shit-done/workflows/sketch.md
+.config/opencode/command/gsd-spec-phase.md	@<HOME>/.config/opencode/get-shit-done/templates/spec.md
+.config/opencode/command/gsd-spec-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/spec-phase.md
+.config/opencode/command/gsd-spike.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-spike.md	@<HOME>/.config/opencode/get-shit-done/workflows/spike-wrap-up.md
+.config/opencode/command/gsd-spike.md	@<HOME>/.config/opencode/get-shit-done/workflows/spike.md
+.config/opencode/command/gsd-stats.md	@<HOME>/.config/opencode/get-shit-done/workflows/stats.md
+.config/opencode/command/gsd-surface.md	AGENTS_DIR=<HOME>/.config/opencode/agents
+.config/opencode/command/gsd-surface.md	COMMANDS_DIR=<HOME>/.config/opencode/commands/gsd
+.config/opencode/command/gsd-surface.md	Cluster definitions: `<HOME>/.config/opencode/get-shit-done/bin/lib/clusters.cjs`
+.config/opencode/command/gsd-surface.md	Engine module: `<HOME>/.config/opencode/get-shit-done/bin/lib/surface.cjs`
+.config/opencode/command/gsd-surface.md	Install profile marker: `<HOME>/.config/opencode/skills/.gsd-profile`
+.config/opencode/command/gsd-surface.md	Manage the runtime skill surface without reinstall. Reads/writes `<HOME>/.config/opencode/skills/.gsd-surface.json`
+.config/opencode/command/gsd-surface.md	RUNTIME_CONFIG_DIR=<HOME>/.config/opencode/skills
+.config/opencode/command/gsd-surface.md	Surface state file: `<HOME>/.config/opencode/skills/.gsd-surface.json`
+.config/opencode/command/gsd-thread.md	@<HOME>/.config/opencode/get-shit-done/workflows/thread.md
+.config/opencode/command/gsd-ui-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-ui-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/ui-phase.md
+.config/opencode/command/gsd-ui-review.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-ui-review.md	@<HOME>/.config/opencode/get-shit-done/workflows/ui-review.md
+.config/opencode/command/gsd-ultraplan-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-ultraplan-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/ultraplan-phase.md
+.config/opencode/command/gsd-undo.md	@<HOME>/.config/opencode/get-shit-done/references/gate-prompts.md
+.config/opencode/command/gsd-undo.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-undo.md	@<HOME>/.config/opencode/get-shit-done/workflows/undo.md
+.config/opencode/command/gsd-update.md	@<HOME>/.config/opencode/get-shit-done/workflows/reapply-patches.md
+.config/opencode/command/gsd-update.md	@<HOME>/.config/opencode/get-shit-done/workflows/sync-skills.md
+.config/opencode/command/gsd-update.md	@<HOME>/.config/opencode/get-shit-done/workflows/update.md
+.config/opencode/command/gsd-validate-phase.md	@<HOME>/.config/opencode/get-shit-done/workflows/validate-phase.md
+.config/opencode/command/gsd-verify-work.md	@<HOME>/.config/opencode/get-shit-done/templates/UAT.md
+.config/opencode/command/gsd-verify-work.md	@<HOME>/.config/opencode/get-shit-done/workflows/verify-work.md
+.config/opencode/command/gsd-workspace.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/command/gsd-workspace.md	@<HOME>/.config/opencode/get-shit-done/workflows/list-workspaces.md
+.config/opencode/command/gsd-workspace.md	@<HOME>/.config/opencode/get-shit-done/workflows/new-workspace.md
+.config/opencode/command/gsd-workspace.md	@<HOME>/.config/opencode/get-shit-done/workflows/remove-workspace.md
+.config/opencode/get-shit-done/references/artifact-types.md	- **Location**: `<HOME>/.config/opencode/get-shit-done/USER-PROFILE.md`
+.config/opencode/get-shit-done/references/context-budget.md	The keys live in `.claude/settings.json` (project) or `<HOME>/.config/opencode/settings.json` (global) — **not** in `.planning/config.json`:
+.config/opencode/get-shit-done/references/model-profile-resolution.md	@<HOME>/.config/opencode/get-shit-done/references/model-profiles.md
+.config/opencode/get-shit-done/references/planner-mvp-mode.md	- The plan **must produce** `SKELETON.md` in the phase directory alongside `PLAN.md`. Use the template at `@<HOME>/.config/opencode/get-shit-done/references/skeleton-template.md`. `SKELETON.md` records the architectural decisions that subsequent phases will build on (chosen framework, DB, deployment target, auth approach, directory layout).
+.config/opencode/get-shit-done/references/user-profiling.md	- Full absolute file paths containing usernames (e.g., `/Users/john/...`, `<HOME>/...`)
+.config/opencode/get-shit-done/references/verification-patterns.md	**@<HOME>/.config/opencode/get-shit-done/references/checkpoints.md** → `<automation_reference>` section
+.config/opencode/get-shit-done/templates/codebase/structure.md	- Purpose: Resources installed to <HOME>/.config/opencode/
+.config/opencode/get-shit-done/templates/codebase/structure.md	- Purpose: Slash commands installed to <HOME>/.config/opencode/commands/
+.config/opencode/get-shit-done/templates/codebase/structure.md	- Usage: Reference from command with `@<HOME>/.config/opencode/get-shit-done/workflows/{name}.md`
+.config/opencode/get-shit-done/templates/phase-prompt.md	<!-- For checkpoint task examples and patterns, see @<HOME>/.config/opencode/get-shit-done/references/checkpoints.md -->
+.config/opencode/get-shit-done/templates/phase-prompt.md	@<HOME>/.config/opencode/get-shit-done/references/checkpoints.md
+.config/opencode/get-shit-done/templates/phase-prompt.md	@<HOME>/.config/opencode/get-shit-done/templates/summary.md
+.config/opencode/get-shit-done/templates/phase-prompt.md	@<HOME>/.config/opencode/get-shit-done/workflows/execute-plan.md
+.config/opencode/get-shit-done/templates/phase-prompt.md	See `<HOME>/.config/opencode/get-shit-done/references/tdd.md` for TDD plan structure.
+.config/opencode/get-shit-done/templates/phase-prompt.md	See `<HOME>/.config/opencode/get-shit-done/templates/user-setup.md` for full schema and examples
+.config/opencode/get-shit-done/templates/phase-prompt.md	See `<HOME>/.config/opencode/get-shit-done/workflows/verify-phase.md` for verification logic.
+.config/opencode/get-shit-done/workflows/ai-integration-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ai-evals.md
+.config/opencode/get-shit-done/workflows/ai-integration-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ai-frameworks.md
+.config/opencode/get-shit-done/workflows/ai-integration-phase.md	Read <HOME>/.config/opencode/agents/gsd-ai-researcher.md for instructions.
+.config/opencode/get-shit-done/workflows/ai-integration-phase.md	Read <HOME>/.config/opencode/agents/gsd-domain-researcher.md for instructions.
+.config/opencode/get-shit-done/workflows/ai-integration-phase.md	Read <HOME>/.config/opencode/agents/gsd-eval-planner.md for instructions.
+.config/opencode/get-shit-done/workflows/ai-integration-phase.md	Read <HOME>/.config/opencode/agents/gsd-framework-selector.md for instructions.
+.config/opencode/get-shit-done/workflows/ai-integration-phase.md	cp "<HOME>/.config/opencode/get-shit-done/templates/AI-SPEC.md" "${PHASE_DIR}/${PADDED_PHASE}-AI-SPEC.md"
+.config/opencode/get-shit-done/workflows/autonomous.md	Read and execute: `<HOME>/.config/opencode/get-shit-done/references/autonomous-smart-discuss.md`
+.config/opencode/get-shit-done/workflows/complete-milestone.md	**If doesn't exist:** Create from template at `<HOME>/.config/opencode/get-shit-done/templates/retrospective.md`.
+.config/opencode/get-shit-done/workflows/discovery-phase.md	   - Full structure from <HOME>/.config/opencode/get-shit-done/templates/discovery.md
+.config/opencode/get-shit-done/workflows/discovery-phase.md	1. **Scope the discovery** using <HOME>/.config/opencode/get-shit-done/templates/discovery.md:
+.config/opencode/get-shit-done/workflows/discovery-phase.md	6. **Create DISCOVERY.md** using <HOME>/.config/opencode/get-shit-done/templates/discovery.md structure:
+.config/opencode/get-shit-done/workflows/discovery-phase.md	See <HOME>/.config/opencode/get-shit-done/templates/discovery.md `<discovery_protocol>` for full protocol.
+.config/opencode/get-shit-done/workflows/discovery-phase.md	Use <HOME>/.config/opencode/get-shit-done/templates/discovery.md.
+.config/opencode/get-shit-done/workflows/discuss-phase-assumptions.md	PROFILE_PATH="<HOME>/.config/opencode/get-shit-done/USER-PROFILE.md"
+.config/opencode/get-shit-done/workflows/discuss-phase.md	@<HOME>/.config/opencode/get-shit-done/references/domain-probes.md
+.config/opencode/get-shit-done/workflows/discuss-phase.md	@<HOME>/.config/opencode/get-shit-done/references/gate-prompts.md
+.config/opencode/get-shit-done/workflows/discuss-phase.md	@<HOME>/.config/opencode/get-shit-done/references/universal-anti-patterns.md
+.config/opencode/get-shit-done/workflows/discuss-phase.md	Read `@<HOME>/.config/opencode/get-shit-done/references/scout-codebase.md` — it contains the phase-type→map selection table, single-read rule, no-maps fallback, and `<codebase_context>` output schema. Then execute:
+.config/opencode/get-shit-done/workflows/discuss-phase.md	if [ -f "<HOME>/.config/opencode/get-shit-done/USER-PROFILE.md" ]; then
+.config/opencode/get-shit-done/workflows/discuss-phase/modes/advisor.md	     prompt="First, read @<HOME>/.config/opencode/agents/gsd-advisor-researcher.md for your role and instructions.
+.config/opencode/get-shit-done/workflows/discuss-phase/modes/advisor.md	> `<HOME>/.config/opencode/get-shit-done/USER-PROFILE.md` exists). Skip the Read
+.config/opencode/get-shit-done/workflows/discuss-phase/modes/advisor.md	PROFILE_CONTENT=$(cat "<HOME>/.config/opencode/get-shit-done/USER-PROFILE.md" 2>/dev/null || true)
+.config/opencode/get-shit-done/workflows/discuss-phase/modes/advisor.md	PROFILE_PATH="<HOME>/.config/opencode/get-shit-done/USER-PROFILE.md"
+.config/opencode/get-shit-done/workflows/discuss-phase/modes/power.md	Read @<HOME>/.config/opencode/get-shit-done/workflows/discuss-phase-power.md
+.config/opencode/get-shit-done/workflows/eval-review.md	@<HOME>/.config/opencode/get-shit-done/references/ai-evals.md
+.config/opencode/get-shit-done/workflows/eval-review.md	Read <HOME>/.config/opencode/agents/gsd-eval-auditor.md for instructions.
+.config/opencode/get-shit-done/workflows/execute-phase.md	       ${CONTEXT_WINDOW < 200000 ? '' : '@<HOME>/.config/opencode/get-shit-done/references/executor-examples.md'}
+.config/opencode/get-shit-done/workflows/execute-phase.md	       @<HOME>/.config/opencode/get-shit-done/references/checkpoints.md
+.config/opencode/get-shit-done/workflows/execute-phase.md	       @<HOME>/.config/opencode/get-shit-done/references/tdd.md
+.config/opencode/get-shit-done/workflows/execute-phase.md	       @<HOME>/.config/opencode/get-shit-done/references/worktree-path-safety.md
+.config/opencode/get-shit-done/workflows/execute-phase.md	       @<HOME>/.config/opencode/get-shit-done/templates/summary.md
+.config/opencode/get-shit-done/workflows/execute-phase.md	       @<HOME>/.config/opencode/get-shit-done/workflows/execute-plan.md
+.config/opencode/get-shit-done/workflows/execute-phase.md	   c. **If "Execute":** Read and follow `<HOME>/.config/opencode/get-shit-done/workflows/execute-plan.md` **inline**
+.config/opencode/get-shit-done/workflows/execute-phase.md	- Executor agents omit extended deviation rule examples and checkpoint examples from inline prompt — load on-demand via @<HOME>/.config/opencode/get-shit-done/references/executor-examples.md
+.config/opencode/get-shit-done/workflows/execute-phase.md	- Planner agents omit extended anti-pattern lists and specificity examples from inline prompt — load on-demand via @<HOME>/.config/opencode/get-shit-done/references/planner-antipatterns.md
+.config/opencode/get-shit-done/workflows/execute-phase.md	@<HOME>/.config/opencode/get-shit-done/references/agent-contracts.md
+.config/opencode/get-shit-done/workflows/execute-phase.md	@<HOME>/.config/opencode/get-shit-done/references/context-budget.md
+.config/opencode/get-shit-done/workflows/execute-phase.md	@<HOME>/.config/opencode/get-shit-done/references/gates.md
+.config/opencode/get-shit-done/workflows/execute-phase.md	blocking), then read and follow `<HOME>/.config/opencode/get-shit-done/workflows/transition.md`, passing through the `--auto` flag so it propagates to the next phase invocation.
+.config/opencode/get-shit-done/workflows/execute-plan.md	@<HOME>/.config/opencode/get-shit-done/references/git-integration.md
+.config/opencode/get-shit-done/workflows/execute-plan.md	Create `{phase}-{plan}-SUMMARY.md` at `.planning/phases/XX-name/`. Use `<HOME>/.config/opencode/get-shit-done/templates/summary.md`.
+.config/opencode/get-shit-done/workflows/execute-plan.md	If user_setup exists: create `{phase}-USER-SETUP.md` using template `<HOME>/.config/opencode/get-shit-done/templates/user-setup.md`. Per service: env vars table, account setup checklist, dashboard config, local dev notes, verification commands. Status "Incomplete". Set `USER_SETUP_CREATED=true`. If empty/missing: skip.
+.config/opencode/get-shit-done/workflows/execute-plan.md	See <HOME>/.config/opencode/get-shit-done/references/checkpoints.md for details.
+.config/opencode/get-shit-done/workflows/execute-plan.md	See `<HOME>/.config/opencode/get-shit-done/references/tdd.md` for structure.
+.config/opencode/get-shit-done/workflows/explore.md	@<HOME>/.config/opencode/get-shit-done/references/domain-probes.md
+.config/opencode/get-shit-done/workflows/explore.md	@<HOME>/.config/opencode/get-shit-done/references/questioning.md
+.config/opencode/get-shit-done/workflows/health.md	    echo "   Run: rm -rf <HOME>/.config/opencode/tasks/*  (safe — only affects dead sessions)"
+.config/opencode/get-shit-done/workflows/health.md	    echo "⚠️  Found $STALE_COUNT stale task directories in <HOME>/.config/opencode/tasks/"
+.config/opencode/get-shit-done/workflows/health.md	TASKS_DIR="<HOME>/.config/opencode/tasks"
+.config/opencode/get-shit-done/workflows/help.md	- Saves timestamped note to `.planning/notes/` (or `<HOME>/.config/opencode/notes/` globally)
+.config/opencode/get-shit-done/workflows/ingest-docs.md	INIT=$(node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" init ingest-docs)
+.config/opencode/get-shit-done/workflows/ingest-docs.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" commit \
+.config/opencode/get-shit-done/workflows/mvp-phase.md	@<HOME>/.config/opencode/get-shit-done/references/planner-mvp-mode.md
+.config/opencode/get-shit-done/workflows/mvp-phase.md	@<HOME>/.config/opencode/get-shit-done/references/spidr-splitting.md
+.config/opencode/get-shit-done/workflows/mvp-phase.md	@<HOME>/.config/opencode/get-shit-done/references/user-story-template.md
+.config/opencode/get-shit-done/workflows/mvp-phase.md	Normalize per `@<HOME>/.config/opencode/get-shit-done/references/phase-argument-parsing.md` (zero-pad integer phases to two digits).
+.config/opencode/get-shit-done/workflows/mvp-phase.md	Run the SPIDR rules from `@<HOME>/.config/opencode/get-shit-done/references/spidr-splitting.md`. Briefly:
+.config/opencode/get-shit-done/workflows/mvp-phase.md	Run three sequential `question` calls. Each is free-text. After all three, assemble into the canonical sentence per `@<HOME>/.config/opencode/get-shit-done/references/user-story-template.md`:
+.config/opencode/get-shit-done/workflows/new-milestone.md	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/SUMMARY.md
+.config/opencode/get-shit-done/workflows/new-milestone.md	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/{FILE}
+.config/opencode/get-shit-done/workflows/new-project.md	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/ARCHITECTURE.md
+.config/opencode/get-shit-done/workflows/new-project.md	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/FEATURES.md
+.config/opencode/get-shit-done/workflows/new-project.md	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/PITFALLS.md
+.config/opencode/get-shit-done/workflows/new-project.md	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/STACK.md
+.config/opencode/get-shit-done/workflows/new-project.md	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/SUMMARY.md
+.config/opencode/get-shit-done/workflows/new-project.md.backup	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/ARCHITECTURE.md
+.config/opencode/get-shit-done/workflows/new-project.md.backup	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/FEATURES.md
+.config/opencode/get-shit-done/workflows/new-project.md.backup	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/PITFALLS.md
+.config/opencode/get-shit-done/workflows/new-project.md.backup	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/STACK.md
+.config/opencode/get-shit-done/workflows/new-project.md.backup	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/SUMMARY.md
+.config/opencode/get-shit-done/workflows/note.md	- **Global scope**: `<HOME>/.config/opencode/notes/{YYYY-MM-DD}-{slug}.md` — fallback when no `.planning/`, or when `--global` flag is present
+.config/opencode/get-shit-done/workflows/note.md	2. **No `.planning/`**: Falls back to global `<HOME>/.config/opencode/notes/` — works in any directory
+.config/opencode/get-shit-done/workflows/note.md	2. Ensure the notes directory exists (`.planning/notes/` or `<HOME>/.config/opencode/notes/`)
+.config/opencode/get-shit-done/workflows/note.md	2. Glob `<HOME>/.config/opencode/notes/*.md` (if directory exists) — global notes
+.config/opencode/get-shit-done/workflows/note.md	Global (<HOME>/.config/opencode/notes/):
+.config/opencode/get-shit-done/workflows/plan-phase.md	  node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" gap-analysis --phase-dir "${PHASE_DIR}"
+.config/opencode/get-shit-done/workflows/plan-phase.md	**MVP Mode is ENABLED.** Follow vertical-slice planning rules from @<HOME>/.config/opencode/get-shit-done/references/planner-mvp-mode.md. Each plan must deliver a complete vertical slice — thin end-to-end functionality rather than horizontal layers.
+.config/opencode/get-shit-done/workflows/plan-phase.md	**MVP_MODE:** ${MVP_MODE} (when true, follow vertical-slice rules from `@<HOME>/.config/opencode/get-shit-done/references/planner-mvp-mode.md`; when false, ignore MVP guidance entirely.)
+.config/opencode/get-shit-done/workflows/plan-phase.md	**TDD Mode is ENABLED.** Apply TDD heuristics from @<HOME>/.config/opencode/get-shit-done/references/tdd.md to all eligible tasks:
+.config/opencode/get-shit-done/workflows/plan-phase.md	- Planner is instructed to produce `SKELETON.md` in the phase directory alongside `PLAN.md`. The template lives at `@<HOME>/.config/opencode/get-shit-done/references/skeleton-template.md`.
+.config/opencode/get-shit-done/workflows/plan-phase.md	1. Read template: `<HOME>/.config/opencode/get-shit-done/templates/VALIDATION.md`
+.config/opencode/get-shit-done/workflows/plan-phase.md	@<HOME>/.config/opencode/get-shit-done/references/agent-contracts.md
+.config/opencode/get-shit-done/workflows/plan-phase.md	@<HOME>/.config/opencode/get-shit-done/references/gate-prompts.md
+.config/opencode/get-shit-done/workflows/plan-phase.md	@<HOME>/.config/opencode/get-shit-done/references/gates.md
+.config/opencode/get-shit-done/workflows/plan-phase.md	@<HOME>/.config/opencode/get-shit-done/references/revision-loop.md
+.config/opencode/get-shit-done/workflows/plan-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/get-shit-done/workflows/plan-phase.md	When `TDD_MODE` is `true`, the planner agent is instructed to apply `type: tdd` to eligible tasks using heuristics from `references/tdd.md`. The planner's `<required_reading>` is extended to include `@<HOME>/.config/opencode/get-shit-done/references/tdd.md` so gate enforcement rules are available during planning.
+.config/opencode/get-shit-done/workflows/plan-review-convergence.md	@<HOME>/.config/opencode/get-shit-done/references/agent-contracts.md
+.config/opencode/get-shit-done/workflows/plan-review-convergence.md	@<HOME>/.config/opencode/get-shit-done/references/gates.md
+.config/opencode/get-shit-done/workflows/plan-review-convergence.md	@<HOME>/.config/opencode/get-shit-done/references/revision-loop.md
+.config/opencode/get-shit-done/workflows/plan-review-convergence.md	INIT=$(node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" init plan-phase "$PHASE")
+.config/opencode/get-shit-done/workflows/plan-review-convergence.md	PHASE_INFO=$(node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${PHASE}")
+.config/opencode/get-shit-done/workflows/plan-review-convergence.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" state planned-phase --phase "${PHASE}" --name "${phase_name}" --plans "${PLAN_COUNT}"
+.config/opencode/get-shit-done/workflows/profile-user.md	  - "Global AGENTS.md" -- "Add profile to <HOME>/.config/opencode/AGENTS.md for all projects"
+.config/opencode/get-shit-done/workflows/profile-user.md	  ✓ /gsd-dev-preferences   <HOME>/.config/opencode/skills/gsd-dev-preferences/SKILL.md
+.config/opencode/get-shit-done/workflows/profile-user.md	  ✓ Global AGENTS.md        <HOME>/.config/opencode/AGENTS.md
+.config/opencode/get-shit-done/workflows/profile-user.md	**If no artifacts selected:** Display "No artifacts generated. Your profile is saved at <HOME>/.config/opencode/get-shit-done/USER-PROFILE.md" and jump to step 10.
+.config/opencode/get-shit-done/workflows/profile-user.md	- @<HOME>/.config/opencode/agents/gsd-user-profiler.md (profiler agent definition)
+.config/opencode/get-shit-done/workflows/profile-user.md	- @<HOME>/.config/opencode/get-shit-done/references/ui-brand.md (display patterns)
+.config/opencode/get-shit-done/workflows/profile-user.md	- @<HOME>/.config/opencode/get-shit-done/references/user-profiling.md (profiling reference doc)
+.config/opencode/get-shit-done/workflows/profile-user.md	- The user-profiling reference doc at `<HOME>/.config/opencode/get-shit-done/references/user-profiling.md`
+.config/opencode/get-shit-done/workflows/profile-user.md	BACKUP_PATH="<HOME>/.config/opencode/USER-PROFILE.backup.md"
+.config/opencode/get-shit-done/workflows/profile-user.md	Display: "✓ Added profile section to <HOME>/.config/opencode/AGENTS.md"
+.config/opencode/get-shit-done/workflows/profile-user.md	Display: "✓ Generated /gsd-dev-preferences at <HOME>/.config/opencode/skills/gsd-dev-preferences/SKILL.md"
+.config/opencode/get-shit-done/workflows/profile-user.md	Display: "✓ Profile written to <HOME>/.config/opencode/get-shit-done/USER-PROFILE.md"
+.config/opencode/get-shit-done/workflows/profile-user.md	PROFILE_PATH="<HOME>/.config/opencode/get-shit-done/USER-PROFILE.md"
+.config/opencode/get-shit-done/workflows/profile-user.md	Reference: @<HOME>/.config/opencode/get-shit-done/references/user-profiling.md
+.config/opencode/get-shit-done/workflows/profile-user.md	Your profile:    <HOME>/.config/opencode/get-shit-done/USER-PROFILE.md
+.config/opencode/get-shit-done/workflows/profile-user.md	cp "<HOME>/.config/opencode/get-shit-done/USER-PROFILE.md" "<HOME>/.config/opencode/USER-PROFILE.backup.md"
+.config/opencode/get-shit-done/workflows/profile-user.md	✓ Stores profile at <HOME>/.config/opencode/get-shit-done/USER-PROFILE.md
+.config/opencode/get-shit-done/workflows/reapply-patches.md	    PATCHES_DIR="<HOME>/.config/opencode/gsd-local-patches"
+.config/opencode/get-shit-done/workflows/reapply-patches.md	   - **Mechanical drift** — path substitutions (e.g. `/Users/xxx/.claude/` → `<HOME>/.config/opencode/`), variable additions (`${GSD_WS}`, `${AGENT_SKILLS_*}`), error handling additions (`|| true`)
+.config/opencode/get-shit-done/workflows/resume-project.md	@<HOME>/.config/opencode/get-shit-done/references/continuation-format.md
+.config/opencode/get-shit-done/workflows/secure-phase.md	  prompt="Read <HOME>/.config/opencode/agents/gsd-security-auditor.md for instructions.\n\n" +
+.config/opencode/get-shit-done/workflows/secure-phase.md	1. Read template from `<HOME>/.config/opencode/get-shit-done/templates/SECURITY.md`
+.config/opencode/get-shit-done/workflows/secure-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/get-shit-done/workflows/sketch.md	@<HOME>/.config/opencode/get-shit-done/references/sketch-interactivity.md
+.config/opencode/get-shit-done/workflows/sketch.md	@<HOME>/.config/opencode/get-shit-done/references/sketch-theme-system.md
+.config/opencode/get-shit-done/workflows/sketch.md	@<HOME>/.config/opencode/get-shit-done/references/sketch-tooling.md
+.config/opencode/get-shit-done/workflows/sketch.md	@<HOME>/.config/opencode/get-shit-done/references/sketch-variant-patterns.md
+.config/opencode/get-shit-done/workflows/spec-phase.md	INIT=$(node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" init phase-op "${PHASE}")
+.config/opencode/get-shit-done/workflows/spec-phase.md	Use the SPEC.md template from @<HOME>/.config/opencode/get-shit-done/templates/spec.md.
+.config/opencode/get-shit-done/workflows/sync-skills.md	       Run: node <HOME>/.config/opencode/get-shit-done/bin/install.js --global --<runtime>
+.config/opencode/get-shit-done/workflows/sync-skills.md	INSTALL_JS_GLOBAL="<HOME>/.config/opencode/get-shit-done/bin/install.js"
+.config/opencode/get-shit-done/workflows/transition.md	@<HOME>/.config/opencode/get-shit-done/workflows/graduation.md
+.config/opencode/get-shit-done/workflows/ui-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/get-shit-done/workflows/ui-phase.md	Read <HOME>/.config/opencode/agents/gsd-ui-checker.md for instructions.
+.config/opencode/get-shit-done/workflows/ui-phase.md	Read <HOME>/.config/opencode/agents/gsd-ui-researcher.md for instructions.
+.config/opencode/get-shit-done/workflows/ui-phase.md	Template: <HOME>/.config/opencode/get-shit-done/templates/UI-SPEC.md
+.config/opencode/get-shit-done/workflows/ui-review.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/get-shit-done/workflows/ui-review.md	Read <HOME>/.config/opencode/agents/gsd-ui-auditor.md for instructions.
+.config/opencode/get-shit-done/workflows/undo.md	@<HOME>/.config/opencode/get-shit-done/references/gate-prompts.md
+.config/opencode/get-shit-done/workflows/undo.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/get-shit-done/workflows/update.md	The `GSD_DIR` value emitted by `get_installed_version` (line 4) resolves to the runtime-specific config dir (`<HOME>/.config/opencode/`, `~/.gemini/`, `~/.codex/`, etc.), so the script invocation works for every runtime — not just the agent. If `GSD_DIR` is empty (scope `UNKNOWN`), skip this step and go directly to install.
+.config/opencode/get-shit-done/workflows/update.md	global: `<HOME>/.config/opencode/`, `~/.config/opencode/`, `~/.opencode/`, `~/.gemini/`, `~/.config/kilo/`, or `~/.codex/`
+.config/opencode/get-shit-done/workflows/validate-phase.md	  prompt="Read <HOME>/.config/opencode/agents/gsd-nyquist-auditor.md for instructions.\n\n" +
+.config/opencode/get-shit-done/workflows/validate-phase.md	1. Read template from `<HOME>/.config/opencode/get-shit-done/templates/VALIDATION.md`
+.config/opencode/get-shit-done/workflows/validate-phase.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
+.config/opencode/get-shit-done/workflows/verify-phase.md	@<HOME>/.config/opencode/get-shit-done/references/verification-patterns.md
+.config/opencode/get-shit-done/workflows/verify-phase.md	@<HOME>/.config/opencode/get-shit-done/templates/verification-report.md
+.config/opencode/get-shit-done/workflows/verify-phase.md	See <HOME>/.config/opencode/get-shit-done/templates/verification-report.md for complete template.
+.config/opencode/get-shit-done/workflows/verify-work.md	**MVP-mode UAT framing.** When `MVP_MODE=true`, follow the rules in `@<HOME>/.config/opencode/get-shit-done/references/verify-mvp-mode.md`. Briefly:
+.config/opencode/get-shit-done/workflows/verify-work.md	- Follow @<HOME>/.config/opencode/get-shit-done/workflows/diagnose-issues.md
+.config/opencode/get-shit-done/workflows/verify-work.md	@<HOME>/.config/opencode/get-shit-done/templates/UAT.md
+.config/opencode/get-shit-done/workflows/verify-work.md	Read and follow `<HOME>/.config/opencode/get-shit-done/workflows/transition.md`.
+AGENTS.md	- Local inventory (HIGH): `ls`/`du`/`find` on live `<HOME> — sizes, layout, single symlink (`~/.claude/skills/archify`), `stow`/`chezmoi` absent, `~/.config/opencode` itself a git repo; secret presence verified (`jev.env` TYPESAFE_API_KEY, `.git-credentials` `gho_` token, `.claude.json` machine IDs). Values redacted above.
