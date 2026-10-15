@@ -55,7 +55,7 @@ home/.azure
 # --- machine-local runtime data (backstop for MANIFEST excludes) ---
 # context-mode session stores and any SQLite database/sidecar are runtime state,
 # not managed config; the matching MANIFEST.json excludes drive capture/restore.
-**/context-mode/sessions/
+**/sessions/
 **/*.db
 **/*.db-wal
 **/*.db-shm

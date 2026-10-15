@@ -25,7 +25,7 @@
         "*.db",
         "*.db-wal",
         "*.db-shm",
-        "context-mode/sessions/",
+        "sessions/",
         "gsd-router.backup/",
         "backup-*"
       ],

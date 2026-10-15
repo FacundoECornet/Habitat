@@ -90,8 +90,14 @@ const ALLOWLIST = new Map([
 const REQUIRED_EXCLUDES = [
   'node_modules/', 'bin/', '*.tar.gz', '*.tgz', '*.tar', '*.zip', '*.bak*',
   'opencode-backup/', 'opencode-backup-*.tar.gz', 'agents.bak-*',
-  'jev.env', '.git-credentials', '.claude.json', '.git/', '*.local'
+  'jev.env', '.git-credentials', '.claude.json', '.git/', '*.local',
+  '*.db', '*.db-wal', '*.db-shm'
 ];
+
+// Per-origin extras (Phase 3 Option-A runtime exclusions, decisions 03-03).
+const REQUIRED_EXCLUDES_BY_ORIGIN = new Map([
+  ['.config/opencode', ['sessions/', 'gsd-router.backup/', 'backup-*']]
+]);
 
 const ENTRY_KEYS = ['origin', 'dest', 'mode', 'excludes', 'post_steps'];
 
@@ -157,6 +163,10 @@ doc.entries.forEach(function (entry, i) {
     if (e.split('/').includes('..')) invalid('manifest-exclude-traversal', where + '.excludes must not contain "..": ' + JSON.stringify(e));
   }
   for (const req of REQUIRED_EXCLUDES) {
+    if (!excludes.includes(req)) invalid('manifest-excludes-incomplete', where + '.excludes must include ' + JSON.stringify(req));
+  }
+  const originRequired = REQUIRED_EXCLUDES_BY_ORIGIN.get(origin) || [];
+  for (const req of originRequired) {
     if (!excludes.includes(req)) invalid('manifest-excludes-incomplete', where + '.excludes must include ' + JSON.stringify(req));
   }
 

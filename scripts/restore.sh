@@ -149,17 +149,21 @@ parse_truncated() {
   exit 2
 }
 # Reject exclude patterns whose shape rsync interprets differently from the
-# in-process matcher (WR-01): rsync comments (`#`), include rules (`!`), and
-# internal-slash anchored patterns. Runs before any destination/log write.
+# in-process matcher (WR-01/WR-03): rsync comments (`#`), include rules (`!`),
+# and any internal slash — including a slash before a trailing slash — anchor
+# the pattern to the transfer root. Both `sub/dir` and `a/b/` are rejected
+# before any destination/log write; only slash-free names (`node_modules/`,
+# `sessions/`, `*.local`) are supported.
 validate_exclude() {
-  local pat="$1"
+  local pat="$1" core
   case "$pat" in
     '#'*) printf 'restore: exclude-pattern-unsupported (%s: leading # is an rsync comment) (WR-01)\n' "$pat" >&2; exit 2 ;;
     '!'*) printf 'restore: exclude-pattern-unsupported (%s: leading ! is an rsync include rule) (WR-01)\n' "$pat" >&2; exit 2 ;;
   esac
-  case "$pat" in
-    */) return 0 ;;
-    */*) printf 'restore: exclude-pattern-unsupported (%s: internal slash anchors the pattern) (WR-01)\n' "$pat" >&2; exit 2 ;;
+  core="$pat"
+  case "$core" in */) core="${core%/}" ;; esac
+  case "$core" in
+    */*) printf 'restore: exclude-pattern-unsupported (%s: internal slash anchors the pattern) (WR-01/WR-03)\n' "$pat" >&2; exit 2 ;;
   esac
   return 0
 }
@@ -289,34 +293,47 @@ file_equal() {
   return 1
 }
 
-# --- rsync glob-style exclusion matcher (mirrors --exclude-from) ------------
+# --- rsync-parity glob-style exclusion matcher (WR-04/WR-05) ----------------
+# Only two pattern shapes reach this matcher (validate_exclude rejects the
+# rest before any write):
+#   `name`            Glob-match against any single path component, file or
+#                     directory — equivalent to rsync's final-component match
+#                     plus its "excluding a directory excludes its contents".
+#   `name/`           Same, but the component must be a directory in the source
+#                     (rsync trailing-slash directory-only semantics). The
+#                     source root is required for that check; without it the
+#                     pattern degrades to component-name matching.
 is_excluded() {
-  local rel="$1" exf="$2" pat base comp d rest
-  base="${rel##*/}"
+  local rel="$1" exf="$2" srcroot="${3:-}" pat d comp rest prefix
   while IFS= read -r pat; do
     [ -n "$pat" ] || continue
     case "$pat" in
       */)
         d="${pat%/}"
-        case "/$rel/" in *"/$d/"*) return 0 ;; esac
+        rest="$rel"; prefix=""
+        while :; do
+          comp="${rest%%/*}"
+          [ -n "$comp" ] || break
+          prefix="${prefix:+$prefix/}$comp"
+          case "$comp" in $d)
+            if [ -n "$srcroot" ] && [ ! -d "$srcroot/$prefix" ]; then
+              : # name matches but the component is not a directory
+            else
+              return 0
+            fi
+            ;;
+          esac
+          case "$rest" in */*) rest="${rest#*/}" ;; *) break ;; esac
+        done
         ;;
       *)
-        case "$rel" in $pat) return 0 ;; esac
-        case "$base" in $pat) return 0 ;; esac
-        case "$pat" in
-          */*) ;;
-          *)
-            rest="$rel"
-            while [ -n "$rest" ]; do
-              comp="${rest%%/*}"
-              case "$comp" in $pat) return 0 ;; esac
-              case "$rest" in
-                */*) rest="${rest#*/}" ;;
-                *) rest="" ;;
-              esac
-            done
-            ;;
-        esac
+        rest="$rel"
+        while :; do
+          comp="${rest%%/*}"
+          [ -n "$comp" ] || break
+          case "$comp" in $pat) return 0 ;; esac
+          case "$rest" in */*) rest="${rest#*/}" ;; *) break ;; esac
+        done
         ;;
     esac
   done < "$exf"
@@ -341,6 +358,60 @@ _machine_local() {
   return 1
 }
 
+# --- per-entry mutation action log (CR-01 rollback) --------------------------
+# Every `mv` and `mkdir` performed while processing one entry is recorded so a
+# later refusal (e.g. backup-name collision) can roll the entry back before
+# rsync — earlier destinations must never be left displaced from their
+# original paths. Kinds: `mv <from>␟<to>` and `mkdir <path>`.
+ENTRY_KIND=()
+ENTRY_ARG=()
+entry_act_reset() { ENTRY_KIND=(); ENTRY_ARG=(); }
+entry_act_mv() { ENTRY_KIND+=("mv"); ENTRY_ARG+=("$1"$'\x1f'"$2"); }
+entry_act_mkdir() { ENTRY_KIND+=("mkdir"); ENTRY_ARG+=("$1"); }
+
+# Undo every recorded action in reverse order. A rollback that cannot restore
+# a moved object reports it and keeps the backup (never clobbers an occupied
+# destination path). Empty directories created by the entry are removed; a
+# non-empty one is left in place (rsync never ran, so that means foreign
+# content appeared meanwhile) and reported.
+rollback_entry() {
+  local i n kind arg from to problems=0
+  n=${#ENTRY_KIND[@]}
+  for ((i = n - 1; i >= 0; i--)); do
+    kind="${ENTRY_KIND[$i]}"
+    arg="${ENTRY_ARG[$i]}"
+    case "$kind" in
+      mv)
+        from="${arg%%$'\x1f'*}"
+        to="${arg#*$'\x1f'}"
+        if [ -e "$from" ] || [ -L "$from" ]; then
+          record_failure "restore: rollback-occupied ($from) — backup kept at $to (CR-01)"
+          problems=$((problems + 1))
+        elif [ -e "$to" ] || [ -L "$to" ]; then
+          if mv -- "$to" "$from"; then
+            printf 'restore: rollback (%s -> %s)\n' "$(printf '%q' "$to")" "$(printf '%q' "$from")"
+            log_line "rollback ${to} -> ${from}"
+          else
+            record_failure "restore: rollback-failed ($to -> $from) (CR-01)"
+            problems=$((problems + 1))
+          fi
+        else
+          record_failure "restore: rollback-missing ($to) (CR-01)"
+          problems=$((problems + 1))
+        fi
+        ;;
+      mkdir)
+        rmdir -- "$arg" 2>/dev/null || {
+          record_failure "restore: rollback-dir-nonempty ($arg) (CR-01)"
+          problems=$((problems + 1))
+        }
+        ;;
+    esac
+  done
+  entry_act_reset
+  [ "$problems" -eq 0 ]
+}
+
 # --- backup an exact blocker to a per-run sibling name (D-01/D-04) ----------
 # `mv` moves the named object itself (symlink link, directory, or file) and
 # never dereferences it. A pre-existing backup name is never overwritten.
@@ -355,6 +426,7 @@ backup_path() {
     record_failure "restore: backup-failed ($target)"
     return 1
   fi
+  entry_act_mv "$target" "$b"
   printf 'restore: backup (%s -> %s)\n' "$(printf '%q' "$target")" "$(printf '%q' "$b")"
   log_line "backup ${target} -> ${b}"
   total_backup=$((total_backup + 1))
@@ -378,13 +450,16 @@ ensure_dir() {
       if [ -L "$cur" ]; then
         backup_path "$cur" || return 1
         mkdir -- "$cur" || { record_failure "restore: mkdir-failed ($cur)"; return 1; }
+        entry_act_mkdir "$cur"
       elif [ -e "$cur" ]; then
         if [ ! -d "$cur" ]; then
           backup_path "$cur" || return 1
           mkdir -- "$cur" || { record_failure "restore: mkdir-failed ($cur)"; return 1; }
+          entry_act_mkdir "$cur"
         fi
       else
         mkdir -- "$cur" || { record_failure "restore: mkdir-failed ($cur)"; return 1; }
+        entry_act_mkdir "$cur"
       fi
     done
   fi
@@ -452,7 +527,7 @@ _entry_dir_real() {
   fi
   while IFS= read -r -d '' sfile <&4; do
     rel="${sfile#"$src"/}"
-    if is_excluded "$rel" "$exf"; then
+    if is_excluded "$rel" "$exf" "$src"; then
       if _machine_local "$rel"; then
         printf 'skipped machine-local: %s\n' "$(printf '%q' "$dst_dir/$rel")"
         ENT_SKIPPED=$((ENT_SKIPPED + 1))
@@ -469,7 +544,13 @@ _entry_dir_real() {
   done 4< "$list"
 
   if [ "$aborted" -ne 0 ]; then
-    record_failure "restore: entry-blocked ($dst_dir) — backup refused; destination left untouched (D-01/D-04)"
+    # CR-01: undo every move/mkdir made so far so a later refusal can never
+    # leave earlier destinations displaced; only then fail the entry.
+    if rollback_entry; then
+      record_failure "restore: entry-blocked ($dst_dir) — backup refused; destination left untouched (D-01/D-04)"
+    else
+      record_failure "restore: entry-blocked ($dst_dir) — backup refused; rollback incomplete, see diagnostics (D-01/D-04/CR-01)"
+    fi
     return 1
   fi
 
@@ -507,7 +588,7 @@ _entry_dir_dry() {
   fi
   while IFS= read -r -d '' sfile <&4; do
     rel="${sfile#"$src"/}"
-    if is_excluded "$rel" "$exf"; then
+    if is_excluded "$rel" "$exf" "$src"; then
       if _machine_local "$rel"; then
         printf '  skipped machine-local %s\n' "$(printf '%q' "$dst_dir/$rel")"
         ENT_SKIPPED=$((ENT_SKIPPED + 1))
@@ -532,8 +613,8 @@ _entry_dir_dry() {
 # --- real-run: copy a single-file root without trailing-slash semantics -----
 _entry_file_real() {
   local src="$1" dst="$2"
-  ensure_dir "$(dirname "$dst")" || return 1
-  _inspect_real "$src" "$dst" || return 1
+  ensure_dir "$(dirname "$dst")" || { rollback_entry || true; return 1; }
+  _inspect_real "$src" "$dst" || { rollback_entry || true; return 1; }
   if ! rsync --no-links --checksum --no-owner --no-group --no-times "$src" "$dst"; then
     record_failure "restore: copy-failed ($dst)"
     return 1
@@ -661,6 +742,7 @@ process_entry() {
   local psf="${postfiles[$idx]}"
 
   ENT_ADDED=0; ENT_CHANGED=0; ENT_SKIPPED=0
+  entry_act_reset
   printf '[entry %s -> %s]\n' "$origin" "$dest"
 
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -674,22 +756,26 @@ process_entry() {
   else
     local entry_failed=0
     if [ "$type" = "file" ]; then
-      if ! _entry_file_real "$src" "$dst"; then
-        record_failure "restore: entry-blocked ($dest) — backup refused; destination left untouched (D-01/D-04)"
-        entry_failed=1
-      fi
+      # WR-02: the file-entry helpers already emit named diagnostics
+      # (backup-collision, backup-failed, mkdir-failed, copy-failed); no
+      # blanket duplicate message here.
+      _entry_file_real "$src" "$dst" || entry_failed=1
     else
-      if ! _entry_dir_real "$src" "$dst" "$exf"; then
-        entry_failed=1
+      _entry_dir_real "$src" "$dst" "$exf" || entry_failed=1
+    fi
+    if [ "$entry_failed" -eq 0 ]; then
+      # A refused entry must never be summarized as a no-op (CR-01).
+      if [ "$ENT_ADDED" -eq 0 ] && [ "$ENT_CHANGED" -eq 0 ]; then
+        printf 'up-to-date, skipped %s files\n' "$ENT_SKIPPED"
+      else
+        printf 'added=%s changed=%s skipped=%s\n' "$ENT_ADDED" "$ENT_CHANGED" "$ENT_SKIPPED"
       fi
-    fi
-    # A refused entry must never be summarized as a no-op (CR-01).
-    if [ "$entry_failed" -eq 0 ] && [ "$ENT_ADDED" -eq 0 ] && [ "$ENT_CHANGED" -eq 0 ]; then
-      printf 'up-to-date, skipped %s files\n' "$ENT_SKIPPED"
+      # WR-01: post-steps (npm ci) only run for an entry whose files were
+      # fully placed; a failed entry never dispatches dependency installs.
+      _real_post_steps "$dst" "$dest" "$psf"
     else
-      printf 'added=%s changed=%s skipped=%s\n' "$ENT_ADDED" "$ENT_CHANGED" "$ENT_SKIPPED"
+      printf 'restore: entry-failed (%s) — post-steps skipped (WR-01)\n' "$dest"
     fi
-    _real_post_steps "$dst" "$dest" "$psf"
   fi
 
   total_added=$((total_added + ENT_ADDED))
