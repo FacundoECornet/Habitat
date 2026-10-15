@@ -63,12 +63,13 @@ done
   printf 'restore: bash-required\n' >&2
   exit 2
 }
-for tool in git node rsync; do
+for tool in git node rsync sha256sum; do
   command -v "$tool" >/dev/null 2>&1 || {
     case "$tool" in
-      rsync) printf 'restore: rsync required (copy engine) — install rsync via your package manager and retry\n' >&2 ;;
-      node)  printf 'restore: node required (manifest parser) — install Node.js and retry\n' >&2 ;;
-      git)   printf 'restore: git required (repository root) — install Git and retry\n' >&2 ;;
+      rsync)     printf 'restore: rsync required (copy engine) — install rsync via your package manager and retry\n' >&2 ;;
+      node)      printf 'restore: node required (manifest parser) — install Node.js and retry\n' >&2 ;;
+      git)       printf 'restore: git required (repository root) — install Git and retry\n' >&2 ;;
+      sha256sum) printf 'restore: sha256sum required (content equality) — install coreutils and retry\n' >&2 ;;
     esac
     exit 2
   }
@@ -137,47 +138,61 @@ if ! manifest_entries "$manifest_path" "$tokens"; then
 fi
 
 # --- read the NUL-delimited token stream into parallel arrays ---------------
+# Fail closed (WR-03): a truncated scratch stream must never look like a clean
+# end of stream. EOF is accepted only where a *new origin* is expected; any
+# missing or non-numeric field, exclude, or post-step token is a parse failure.
 origins=(); dests=(); modes=(); src_types=()
 postfiles=()
 entry_count=0
+parse_truncated() {
+  printf 'restore: manifest-token-truncated\n' >&2
+  exit 2
+}
+# Reject exclude patterns whose shape rsync interprets differently from the
+# in-process matcher (WR-01): rsync comments (`#`), include rules (`!`), and
+# internal-slash anchored patterns. Runs before any destination/log write.
+validate_exclude() {
+  local pat="$1"
+  case "$pat" in
+    '#'*) printf 'restore: exclude-pattern-unsupported (%s: leading # is an rsync comment) (WR-01)\n' "$pat" >&2; exit 2 ;;
+    '!'*) printf 'restore: exclude-pattern-unsupported (%s: leading ! is an rsync include rule) (WR-01)\n' "$pat" >&2; exit 2 ;;
+  esac
+  case "$pat" in
+    */) return 0 ;;
+    */*) printf 'restore: exclude-pattern-unsupported (%s: internal slash anchors the pattern) (WR-01)\n' "$pat" >&2; exit 2 ;;
+  esac
+  return 0
+}
 exec 3< "$tokens" || {
   printf 'restore: manifest-parse-failed (cannot open token stream)\n' >&2
   exit 2
 }
 while IFS= read -r -d '' origin <&3; do
-  IFS= read -r -d '' dest <&3 || break
-  IFS= read -r -d '' mode <&3 || break
-  IFS= read -r -d '' excount <&3 || break
+  IFS= read -r -d '' dest <&3 || parse_truncated
+  IFS= read -r -d '' mode <&3 || parse_truncated
+  IFS= read -r -d '' excount <&3 || parse_truncated
+  case "$excount" in ''|*[!0-9]*) parse_truncated ;; esac
 
   exf="$work/excludes.$entry_count"
   : > "$exf"
   i=0
-  ok=1
   while [ "$i" -lt "$excount" ]; do
-    if IFS= read -r -d '' tok <&3; then
-      printf '%s\n' "$tok" >> "$exf"
-    else
-      ok=0
-      break
-    fi
+    IFS= read -r -d '' tok <&3 || parse_truncated
+    validate_exclude "$tok"
+    printf '%s\n' "$tok" >> "$exf"
     i=$((i + 1))
   done
-  [ "$ok" -eq 1 ] || break
 
-  IFS= read -r -d '' pscount <&3 || break
+  IFS= read -r -d '' pscount <&3 || parse_truncated
+  case "$pscount" in ''|*[!0-9]*) parse_truncated ;; esac
   psf="$work/poststeps.$entry_count"
   : > "$psf"
   i=0
   while [ "$i" -lt "$pscount" ]; do
-    if IFS= read -r -d '' tok <&3; then
-      printf '%s\n' "$tok" >> "$psf"
-    else
-      ok=0
-      break
-    fi
+    IFS= read -r -d '' tok <&3 || parse_truncated
+    printf '%s\n' "$tok" >> "$psf"
     i=$((i + 1))
   done
-  [ "$ok" -eq 1 ] || break
 
   origins+=("$origin")
   dests+=("$dest")
@@ -254,9 +269,11 @@ ENT_SKIPPED=0
 
 record_failure() { printf '%s\n' "$1" >&2; fail_count=$((fail_count + 1)); }
 
+# Persist one escaped record per event (WR-04): `printf %q` keeps a path that
+# contains a newline (or other control byte) inside a single physical log line.
 log_line() {
   [ "$DRY_RUN" -eq 0 ] || return 0
-  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >> "$log_file"
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(printf '%q' "$1")" >> "$log_file"
 }
 
 # --- equality: full content checksum + executable bit only (D-02/D-07) ------
@@ -306,11 +323,22 @@ is_excluded() {
   return 1
 }
 
+# Machine-local when *any* path component ends in `.local` (IN-02), so a file
+# below an excluded `nested.local/` component is reported, not silently dropped.
 _machine_local() {
-  case "${1##*/}" in
-    *.local) return 0 ;;
-    *) return 1 ;;
-  esac
+  local rel="$1" comp rest
+  rest="$rel"
+  while [ -n "$rest" ]; do
+    comp="${rest%%/*}"
+    case "$comp" in
+      *.local) return 0 ;;
+    esac
+    case "$rest" in
+      */*) rest="${rest#*/}" ;;
+      *) break ;;
+    esac
+  done
+  return 1
 }
 
 # --- backup an exact blocker to a per-run sibling name (D-01/D-04) ----------
@@ -327,7 +355,7 @@ backup_path() {
     record_failure "restore: backup-failed ($target)"
     return 1
   fi
-  printf 'restore: backup (%s -> %s)\n' "$target" "$b"
+  printf 'restore: backup (%s -> %s)\n' "$(printf '%q' "$target")" "$(printf '%q' "$b")"
   log_line "backup ${target} -> ${b}"
   total_backup=$((total_backup + 1))
   return 0
@@ -410,11 +438,15 @@ _inspect_dry() {
 }
 
 # --- real-run: copy a directory entry, preserving orphans (D-14) ------------
+# Walks payload directories *and* files so an empty directory cannot bypass
+# blocker inspection (CR-02). Any failed backup/parent inspection aborts the
+# whole entry BEFORE rsync, so a refused backup can never fall through to a
+# copy that destroys the destination (CR-01).
 _entry_dir_real() {
-  local src="$1" dst_dir="$2" exf="$3" sfile rel dfile
+  local src="$1" dst_dir="$2" exf="$3" sfile rel dfile aborted=0
   ensure_dir "$dst_dir" || return 1
   local list="$work/src.list"
-  if ! find "$src" -type f -print0 > "$list" 2>/dev/null; then
+  if ! find "$src" -mindepth 1 \( -type f -o -type d \) -print0 > "$list" 2>/dev/null; then
     record_failure "restore: enumerate-failed ($src)"
     return 1
   fi
@@ -422,28 +454,54 @@ _entry_dir_real() {
     rel="${sfile#"$src"/}"
     if is_excluded "$rel" "$exf"; then
       if _machine_local "$rel"; then
-        printf 'skipped machine-local: %s\n' "$dst_dir/$rel"
+        printf 'skipped machine-local: %s\n' "$(printf '%q' "$dst_dir/$rel")"
         ENT_SKIPPED=$((ENT_SKIPPED + 1))
       fi
       continue
     fi
     dfile="$dst_dir/$rel"
-    ensure_dir "$(dirname "$dfile")" || continue
-    _inspect_real "$sfile" "$dfile" || continue
+    if [ -d "$sfile" ]; then
+      ensure_dir "$dfile" || { aborted=1; continue; }
+      continue
+    fi
+    ensure_dir "$(dirname "$dfile")" || { aborted=1; continue; }
+    _inspect_real "$sfile" "$dfile" || { aborted=1; continue; }
   done 4< "$list"
-  if ! rsync -r -p --no-links --checksum --no-owner --no-group --no-times \
+
+  if [ "$aborted" -ne 0 ]; then
+    record_failure "restore: entry-blocked ($dst_dir) — backup refused; destination left untouched (D-01/D-04)"
+    return 1
+  fi
+
+  # D-15: transfer bytes without `-p` (full mode bits) so a checksum-equal
+  # destination keeps its non-executable permission bits.
+  if ! rsync -r --no-links --checksum --no-owner --no-group --no-times \
       --exclude-from="$exf" "$src/" "$dst_dir/"; then
     record_failure "restore: copy-failed ($dst_dir)"
     return 1
   fi
+
+  # Apply only the source executable bit; other destination mode bits stay.
+  while IFS= read -r -d '' sfile <&5; do
+    [ -d "$sfile" ] && continue
+    rel="${sfile#"$src"/}"
+    is_excluded "$rel" "$exf" && continue
+    dfile="$dst_dir/$rel"
+    [ -e "$dfile" ] || continue
+    if [ -x "$sfile" ]; then
+      chmod a+x -- "$dfile" 2>/dev/null || true
+    else
+      chmod a-x -- "$dfile" 2>/dev/null || true
+    fi
+  done 5< "$list"
   return 0
 }
 
 # --- dry-run: read-only walk of a directory entry ---------------------------
 _entry_dir_dry() {
-  local src="$1" dst_dir="$2" exf="$3" sfile rel dfile
+  local src="$1" dst_dir="$2" exf="$3" sfile rel dfile disp
   local list="$work/src.list"
-  if ! find "$src" -type f -print0 > "$list" 2>/dev/null; then
+  if ! find "$src" -mindepth 1 \( -type f -o -type d \) -print0 > "$list" 2>/dev/null; then
     record_failure "restore: enumerate-failed ($src)"
     return 1
   fi
@@ -451,12 +509,21 @@ _entry_dir_dry() {
     rel="${sfile#"$src"/}"
     if is_excluded "$rel" "$exf"; then
       if _machine_local "$rel"; then
-        printf '  skipped machine-local %s\n' "$dst_dir/$rel"
+        printf '  skipped machine-local %s\n' "$(printf '%q' "$dst_dir/$rel")"
         ENT_SKIPPED=$((ENT_SKIPPED + 1))
       fi
       continue
     fi
     dfile="$dst_dir/$rel"
+    if [ -d "$sfile" ]; then
+      # A converged real directory is a no-op; a symlink/file blocker is drift.
+      if [ -L "$dfile" ] || { [ -e "$dfile" ] && [ ! -d "$dfile" ]; }; then
+        ENT_CHANGED=$((ENT_CHANGED + 1)); action_needed=1
+        disp="${dfile#"$HOME"/}"
+        printf '  changed %s\n' "$disp"
+      fi
+      continue
+    fi
     _inspect_dry "$sfile" "$dfile"
   done 4< "$list"
   return 0
@@ -467,9 +534,15 @@ _entry_file_real() {
   local src="$1" dst="$2"
   ensure_dir "$(dirname "$dst")" || return 1
   _inspect_real "$src" "$dst" || return 1
-  if ! rsync -p --no-links --checksum --no-owner --no-group --no-times "$src" "$dst"; then
+  if ! rsync --no-links --checksum --no-owner --no-group --no-times "$src" "$dst"; then
     record_failure "restore: copy-failed ($dst)"
     return 1
+  fi
+  # D-15: apply only the source executable bit.
+  if [ -x "$src" ]; then
+    chmod a+x -- "$dst" 2>/dev/null || true
+  else
+    chmod a-x -- "$dst" 2>/dev/null || true
   fi
   return 0
 }
@@ -599,12 +672,19 @@ process_entry() {
     printf 'added=%s changed=%s skipped=%s\n' "$ENT_ADDED" "$ENT_CHANGED" "$ENT_SKIPPED"
     _dry_post_steps "$dst" "$dest" "$psf"
   else
+    local entry_failed=0
     if [ "$type" = "file" ]; then
-      _entry_file_real "$src" "$dst"
+      if ! _entry_file_real "$src" "$dst"; then
+        record_failure "restore: entry-blocked ($dest) — backup refused; destination left untouched (D-01/D-04)"
+        entry_failed=1
+      fi
     else
-      _entry_dir_real "$src" "$dst" "$exf"
+      if ! _entry_dir_real "$src" "$dst" "$exf"; then
+        entry_failed=1
+      fi
     fi
-    if [ "$ENT_ADDED" -eq 0 ] && [ "$ENT_CHANGED" -eq 0 ]; then
+    # A refused entry must never be summarized as a no-op (CR-01).
+    if [ "$entry_failed" -eq 0 ] && [ "$ENT_ADDED" -eq 0 ] && [ "$ENT_CHANGED" -eq 0 ]; then
       printf 'up-to-date, skipped %s files\n' "$ENT_SKIPPED"
     else
       printf 'added=%s changed=%s skipped=%s\n' "$ENT_ADDED" "$ENT_CHANGED" "$ENT_SKIPPED"

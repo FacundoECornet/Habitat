@@ -84,8 +84,8 @@ W_EXAMPLE="${F_SLASH}${F_MNT}${F_SLASH}${F_C}${F_SLASH}${F_USERS}"
 CANON_D13="- **D-13:** Absolute-path scan is fail-closed: \`grep -rEn\` over versioned files for \`${H_EXAMPLE}\` and \`${W_EXAMPLE}\`; capture aborts on hit; small allowlist for intentional refs only."
 
 # Fixed GSD execution-context reference lines appear in the immutable,
-# already-completed plan files across Phases 1 and 2 (the execute-plan workflow
-# and the summary template). They are assembled from fragments so this script
+# already-completed plan files across Phases 1, 2, and 3 (the execute-plan
+# workflow and the summary template). They are assembled from fragments so this script
 # never stores a complete machine-bound literal. Exemption requires BOTH the
 # exact plan path and the exact complete line content — whole plan files are
 # never exempt.
@@ -110,7 +110,12 @@ allowlist_check() {
     .planning/phases/01-inventory-exclusions-manifest/01-12-PLAN.md|\
     .planning/phases/02-capture-script/02-01-PLAN.md|\
     .planning/phases/02-capture-script/02-02-PLAN.md|\
-    .planning/phases/02-capture-script/02-03-PLAN.md)
+    .planning/phases/02-capture-script/02-03-PLAN.md|\
+    .planning/phases/opencode-habitat-03-restore-script/03-01-PLAN.md|\
+    .planning/phases/opencode-habitat-03-restore-script/03-02-PLAN.md|\
+    .planning/phases/opencode-habitat-03-restore-script/03-03-PLAN.md|\
+    .planning/phases/opencode-habitat-03-restore-script/03-04-PLAN.md|\
+    .planning/phases/opencode-habitat-03-restore-script/03-05-PLAN.md)
       [ "$text" = "$EXEC_REF_WF" ] && return 0
       [ "$text" = "$EXEC_REF_TPL" ] && return 0
       ;;
