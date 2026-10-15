@@ -626,7 +626,7 @@ ls .planning/graphs/graph.json 2>/dev/null
 If graph.json exists, check freshness:
 
 ```bash
-node "__HABITAT_HOME__/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify status
+node "$HOME/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify status
 ```
 
 If the status response has `stale: true`, note for later: "Graph is {age_hours}h old -- treat semantic relationships as approximate." Include this annotation inline with any graph context injected below.
@@ -634,7 +634,7 @@ If the status response has `stale: true`, note for later: "Graph is {age_hours}h
 Query the graph for each major capability in the phase scope (2-3 queries per D-05, discovery-focused):
 
 ```bash
-node "__HABITAT_HOME__/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify query "<capability-keyword>" --budget 1500
+node "$HOME/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify query "<capability-keyword>" --budget 1500
 ```
 
 Derive query terms from the phase goal and requirement descriptions. Examples:

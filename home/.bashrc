@@ -120,18 +120,41 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-# opencode
-export PATH=__HABITAT_HOME__/.opencode/bin:$PATH
+# opencode (ruta portable: nunca hardcodear el home del usuario)
+if [ -d "$HOME/.opencode/bin" ]; then
+    export PATH="$HOME/.opencode/bin:$PATH"
+fi
 
 . "$HOME/.local/bin/env"
 # Graphify
 alias graph-update='graphify extract . --code-only && graphify cluster-only .'
-alias graph-tree='explorer.exe graphify-out/GRAPH_TREE.html'
-alias graph-graph='explorer.exe graphify-out/graph.html'
-alias graph-report='explorer.exe graphify-out/GRAPH_REPORT.md'
-export PATH="$HOME/bin:$PATH"
+# Abrir artefactos en el SO anfitrión solo si existe un bridge (WSL: explorer.exe;
+# Linux nativo: wslview/xdg-open). Sin bridge, el alias no se define.
+if command -v explorer.exe >/dev/null 2>&1; then
+    _habitat_open='explorer.exe'
+elif command -v wslview >/dev/null 2>&1; then
+    _habitat_open='wslview'
+elif command -v xdg-open >/dev/null 2>&1; then
+    _habitat_open='xdg-open'
+else
+    _habitat_open=''
+fi
+if [ -n "$_habitat_open" ]; then
+    alias graph-tree="$_habitat_open graphify-out/GRAPH_TREE.html"
+    alias graph-graph="$_habitat_open graphify-out/graph.html"
+    alias graph-report="$_habitat_open graphify-out/GRAPH_REPORT.md"
+fi
+unset _habitat_open
+if [ -d "$HOME/bin" ]; then
+    export PATH="$HOME/bin:$PATH"
+fi
 
-# Jev / TypeSafe API key
+# Jev / TypeSafe API key — carga portable (sed, sin grep -P) y sin valores en el repo.
+# El archivo ~/.config/opencode/jev.env lo crea tools/install.mjs desde jev.env.example.
 if [ -f "$HOME/.config/opencode/jev.env" ]; then
-    export TYPESAFE_API_KEY="$(grep -oP '^TYPESAFE_API_KEY=\K.*' "$HOME/.config/opencode/jev.env")"
+    JEV_KEY="$(sed -n 's/^TYPESAFE_API_KEY=//p' "$HOME/.config/opencode/jev.env" | head -n 1)"
+    if [ -n "$JEV_KEY" ]; then
+        export TYPESAFE_API_KEY="$JEV_KEY"
+    fi
+    unset JEV_KEY
 fi

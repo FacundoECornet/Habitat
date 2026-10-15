@@ -46,8 +46,6 @@
 .config/opencode/agents/gsd-phase-researcher.md	**Project skills:** @<HOME>/.config/opencode/get-shit-done/references/project-skills-discovery.md
 .config/opencode/agents/gsd-phase-researcher.md	@<HOME>/.config/opencode/get-shit-done/references/mandatory-initial-read.md
 .config/opencode/agents/gsd-phase-researcher.md	@<HOME>/.config/opencode/get-shit-done/references/thinking-models-research.md
-.config/opencode/agents/gsd-phase-researcher.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify query "<capability-keyword>" --budget 1500
-.config/opencode/agents/gsd-phase-researcher.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify status
 .config/opencode/agents/gsd-plan-checker.md	@<HOME>/.config/opencode/get-shit-done/references/few-shot-examples/plan-checker.md
 .config/opencode/agents/gsd-plan-checker.md	@<HOME>/.config/opencode/get-shit-done/references/gates.md
 .config/opencode/agents/gsd-plan-checker.md	@<HOME>/.config/opencode/get-shit-done/references/thinking-models-planning.md
@@ -65,8 +63,6 @@
 .config/opencode/agents/gsd-planner.md	@<HOME>/.config/opencode/get-shit-done/templates/summary.md
 .config/opencode/agents/gsd-planner.md	@<HOME>/.config/opencode/get-shit-done/workflows/execute-plan.md
 .config/opencode/agents/gsd-planner.md	See @<HOME>/.config/opencode/get-shit-done/references/planner-chunked.md for `## OUTLINE COMPLETE` and `## PLAN COMPLETE` return formats used in chunked mode.
-.config/opencode/agents/gsd-planner.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify query "<phase-goal-keyword>" --budget 2000
-.config/opencode/agents/gsd-planner.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify status
 .config/opencode/agents/gsd-planner.md.backup-routing	   Format rules from `@<HOME>/.config/opencode/get-shit-done/references/user-story-template.md`:
 .config/opencode/agents/gsd-planner.md.backup-routing	**Project skills:** @<HOME>/.config/opencode/get-shit-done/references/project-skills-discovery.md
 .config/opencode/agents/gsd-planner.md.backup-routing	**Test:** Could a different the agent instance execute without asking clarifying questions? If not, add specificity. See @<HOME>/.config/opencode/get-shit-done/references/planner-antipatterns.md for vague-vs-specific comparison table.
@@ -81,8 +77,6 @@
 .config/opencode/agents/gsd-planner.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/templates/summary.md
 .config/opencode/agents/gsd-planner.md.backup-routing	@<HOME>/.config/opencode/get-shit-done/workflows/execute-plan.md
 .config/opencode/agents/gsd-planner.md.backup-routing	See @<HOME>/.config/opencode/get-shit-done/references/planner-chunked.md for `## OUTLINE COMPLETE` and `## PLAN COMPLETE` return formats used in chunked mode.
-.config/opencode/agents/gsd-planner.md.backup-routing	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify query "<phase-goal-keyword>" --budget 2000
-.config/opencode/agents/gsd-planner.md.backup-routing	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify status
 .config/opencode/agents/gsd-research-synthesizer.md	Use template: <HOME>/.config/opencode/get-shit-done/templates/research-project/SUMMARY.md
 .config/opencode/agents/gsd-roadmapper.md	Reference full template: `<HOME>/.config/opencode/get-shit-done/templates/roadmap.md`
 .config/opencode/agents/gsd-roadmapper.md	Use template from `<HOME>/.config/opencode/get-shit-done/templates/state.md`.
@@ -141,21 +135,12 @@
 .config/opencode/command/gsd-extract-learnings.md	Execute the extract-learnings workflow from @<HOME>/.config/opencode/get-shit-done/workflows/extract-learnings.md end-to-end.
 .config/opencode/command/gsd-fast.md	@<HOME>/.config/opencode/get-shit-done/workflows/fast.md
 .config/opencode/command/gsd-forensics.md	@<HOME>/.config/opencode/get-shit-done/workflows/forensics.md
-.config/opencode/command/gsd-graphify.md	  && node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify build snapshot \
-.config/opencode/command/gsd-graphify.md	  && node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify status
-.config/opencode/command/gsd-graphify.md	  node <HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs config-set graphify.enabled true
-.config/opencode/command/gsd-graphify.md	**CJS-only (graphify):** `graphify` subcommands are not registered on `gsd-sdk query`. Use `node <HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs graphify …` as documented in this command and in `docs/CLI-TOOLS.md`. Other tooling may still use `gsd-sdk query` where a handler exists.
-.config/opencode/command/gsd-graphify.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" graphify build
-.config/opencode/command/gsd-graphify.md	node <HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs graphify diff
-.config/opencode/command/gsd-graphify.md	node <HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs graphify query <term>
-.config/opencode/command/gsd-graphify.md	node <HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs graphify status
 .config/opencode/command/gsd-health.md	@<HOME>/.config/opencode/get-shit-done/workflows/health.md
 .config/opencode/command/gsd-help.md	@<HOME>/.config/opencode/get-shit-done/workflows/help.md
 .config/opencode/command/gsd-import.md	@<HOME>/.config/opencode/get-shit-done/references/doc-conflict-engine.md
 .config/opencode/command/gsd-import.md	@<HOME>/.config/opencode/get-shit-done/references/gate-prompts.md
 .config/opencode/command/gsd-import.md	@<HOME>/.config/opencode/get-shit-done/references/ui-brand.md
 .config/opencode/command/gsd-import.md	@<HOME>/.config/opencode/get-shit-done/workflows/import.md
-.config/opencode/command/gsd-import.md	Run: `node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" from-gsd2`
 .config/opencode/command/gsd-inbox.md	@<HOME>/.config/opencode/get-shit-done/workflows/inbox.md
 .config/opencode/command/gsd-ingest-docs.md	@<HOME>/.config/opencode/get-shit-done/references/doc-conflict-engine.md
 .config/opencode/command/gsd-ingest-docs.md	@<HOME>/.config/opencode/get-shit-done/references/gate-prompts.md
@@ -313,8 +298,6 @@
 .config/opencode/get-shit-done/workflows/health.md	    echo "⚠️  Found $STALE_COUNT stale task directories in <HOME>/.config/opencode/tasks/"
 .config/opencode/get-shit-done/workflows/health.md	TASKS_DIR="<HOME>/.config/opencode/tasks"
 .config/opencode/get-shit-done/workflows/help.md	- Saves timestamped note to `.planning/notes/` (or `<HOME>/.config/opencode/notes/` globally)
-.config/opencode/get-shit-done/workflows/ingest-docs.md	INIT=$(node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" init ingest-docs)
-.config/opencode/get-shit-done/workflows/ingest-docs.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" commit \
 .config/opencode/get-shit-done/workflows/mvp-phase.md	@<HOME>/.config/opencode/get-shit-done/references/planner-mvp-mode.md
 .config/opencode/get-shit-done/workflows/mvp-phase.md	@<HOME>/.config/opencode/get-shit-done/references/spidr-splitting.md
 .config/opencode/get-shit-done/workflows/mvp-phase.md	@<HOME>/.config/opencode/get-shit-done/references/user-story-template.md
@@ -338,7 +321,6 @@
 .config/opencode/get-shit-done/workflows/note.md	2. Ensure the notes directory exists (`.planning/notes/` or `<HOME>/.config/opencode/notes/`)
 .config/opencode/get-shit-done/workflows/note.md	2. Glob `<HOME>/.config/opencode/notes/*.md` (if directory exists) — global notes
 .config/opencode/get-shit-done/workflows/note.md	Global (<HOME>/.config/opencode/notes/):
-.config/opencode/get-shit-done/workflows/plan-phase.md	  node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" gap-analysis --phase-dir "${PHASE_DIR}"
 .config/opencode/get-shit-done/workflows/plan-phase.md	**MVP Mode is ENABLED.** Follow vertical-slice planning rules from @<HOME>/.config/opencode/get-shit-done/references/planner-mvp-mode.md. Each plan must deliver a complete vertical slice — thin end-to-end functionality rather than horizontal layers.
 .config/opencode/get-shit-done/workflows/plan-phase.md	**MVP_MODE:** ${MVP_MODE} (when true, follow vertical-slice rules from `@<HOME>/.config/opencode/get-shit-done/references/planner-mvp-mode.md`; when false, ignore MVP guidance entirely.)
 .config/opencode/get-shit-done/workflows/plan-phase.md	**TDD Mode is ENABLED.** Apply TDD heuristics from @<HOME>/.config/opencode/get-shit-done/references/tdd.md to all eligible tasks:
@@ -353,9 +335,6 @@
 .config/opencode/get-shit-done/workflows/plan-review-convergence.md	@<HOME>/.config/opencode/get-shit-done/references/agent-contracts.md
 .config/opencode/get-shit-done/workflows/plan-review-convergence.md	@<HOME>/.config/opencode/get-shit-done/references/gates.md
 .config/opencode/get-shit-done/workflows/plan-review-convergence.md	@<HOME>/.config/opencode/get-shit-done/references/revision-loop.md
-.config/opencode/get-shit-done/workflows/plan-review-convergence.md	INIT=$(node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" init plan-phase "$PHASE")
-.config/opencode/get-shit-done/workflows/plan-review-convergence.md	PHASE_INFO=$(node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${PHASE}")
-.config/opencode/get-shit-done/workflows/plan-review-convergence.md	node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" state planned-phase --phase "${PHASE}" --name "${phase_name}" --plans "${PLAN_COUNT}"
 .config/opencode/get-shit-done/workflows/profile-user.md	  - "Global AGENTS.md" -- "Add profile to <HOME>/.config/opencode/AGENTS.md for all projects"
 .config/opencode/get-shit-done/workflows/profile-user.md	  ✓ /gsd-dev-preferences   <HOME>/.config/opencode/skills/gsd-dev-preferences/SKILL.md
 .config/opencode/get-shit-done/workflows/profile-user.md	  ✓ Global AGENTS.md        <HOME>/.config/opencode/AGENTS.md
@@ -383,7 +362,6 @@
 .config/opencode/get-shit-done/workflows/sketch.md	@<HOME>/.config/opencode/get-shit-done/references/sketch-theme-system.md
 .config/opencode/get-shit-done/workflows/sketch.md	@<HOME>/.config/opencode/get-shit-done/references/sketch-tooling.md
 .config/opencode/get-shit-done/workflows/sketch.md	@<HOME>/.config/opencode/get-shit-done/references/sketch-variant-patterns.md
-.config/opencode/get-shit-done/workflows/spec-phase.md	INIT=$(node "<HOME>/.config/opencode/get-shit-done/bin/gsd-tools.cjs" init phase-op "${PHASE}")
 .config/opencode/get-shit-done/workflows/spec-phase.md	Use the SPEC.md template from @<HOME>/.config/opencode/get-shit-done/templates/spec.md.
 .config/opencode/get-shit-done/workflows/sync-skills.md	       Run: node <HOME>/.config/opencode/get-shit-done/bin/install.js --global --<runtime>
 .config/opencode/get-shit-done/workflows/sync-skills.md	INSTALL_JS_GLOBAL="<HOME>/.config/opencode/get-shit-done/bin/install.js"

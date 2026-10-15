@@ -38,6 +38,8 @@ build/
 **/*.bak*
 **/*.bak-*
 **/*.backup-*
+*.backup
+**/*.backup
 **/opencode-backup/
 **/opencode-backup-*.tar.gz
 **/agents.bak-*

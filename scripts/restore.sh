@@ -34,7 +34,10 @@
 #   process.
 #
 # Usage:
-#   scripts/restore.sh [--dry-run]
+#   scripts/restore.sh [--dry-run] [--verify]
+#
+#   --verify runs tools/verify.mjs after a successful restore (VER-01/VER-02).
+#   tools/install.mjs always passes it.
 #
 # NOTE: `set -e` is deliberately omitted — rsync, sha256sum, and `read` exit
 # statuses are handled explicitly. Only `set -u` and `set -o pipefail` are on.
@@ -42,15 +45,20 @@
 set -u
 set -o pipefail
 
+VERIFY_ARGS=()
+
 # --- argument parsing -------------------------------------------------------
 DRY_RUN=0
+VERIFY=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
+    --verify) VERIFY=1 ;;
     -h|--help)
-      printf 'Usage: restore.sh [--dry-run]\n'
+      printf 'Usage: restore.sh [--dry-run] [--verify]\n'
       exit 0
       ;;
+    --no-models|--no-cli) VERIFY_ARGS+=("$arg") ;;
     *)
       printf 'restore: unknown-argument (%s)\n' "$arg" >&2
       exit 2
@@ -812,6 +820,19 @@ log_line "complete added=${total_added} changed=${total_changed} skipped=${total
 
 if [ "$fail_count" -eq 0 ]; then
   printf 'restore: complete\n'
+  if [ "$VERIFY" -eq 1 ]; then
+    verify_tool="$repo_root/tools/verify.mjs"
+    if [ ! -f "$verify_tool" ]; then
+      printf 'restore: verify-missing (tools/verify.mjs)\n' >&2
+      exit 1
+    fi
+    printf 'restore: verifying\n'
+    # shellcheck disable=SC2086
+    if ! node "$verify_tool" --home "$home_real" --repo "$repo_root" ${VERIFY_ARGS+"${VERIFY_ARGS[@]}"}; then
+      printf 'restore: verify-failed\n' >&2
+      exit 1
+    fi
+  fi
   exit 0
 fi
 printf 'restore: failed (%d errors)\n' "$fail_count" >&2
