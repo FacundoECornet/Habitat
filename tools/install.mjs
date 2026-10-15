@@ -205,6 +205,7 @@ function patchedGsdStep(options) {
     "references/model-profile-resolution.md",
     "command/gsd-graphify.md",
     "command/gsd-import.md",
+    "workflows/execute-phase.md",
   ];
   for (const relative of files) {
     const repoPath = path.join(options.repo, "home", ".config", "opencode", "get-shit-done", relative);

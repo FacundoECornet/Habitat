@@ -1733,16 +1733,45 @@ STOP. Do not proceed to auto-advance or transition.
 
 Execute the transition workflow inline (do NOT use Agent — orchestrator context is ~10-15%, transition needs phase completion data already in context):
 
-First run `gsd-graphify-sync` from the project root (local only, best-effort, never
-blocking), then read and follow `__HABITAT_HOME__/.config/opencode/get-shit-done/workflows/transition.md`, passing through the `--auto` flag so it propagates to the next phase invocation.
+<!-- anchor:begin graphify-sync -->
+**Graphify sync (verificado, nunca bloqueante):** antes de continuar, corré
+`gsd-graphify-sync` desde la raíz del proyecto. El refresh solo cuenta si el tool
+termina en 0 **y** `graphify-out/graph.json` quedó regenerado en la corrida; el tool
+imprime el veredicto en su última línea:
+
+```bash
+GRAPHIFY_SYNC=$(gsd-graphify-sync | tail -n 1 | sed 's/^GRAPHIFY_SYNC=//')
+```
+
+Reportalo en el resumen de fase con ese valor y nada más: `Graphify: actualizado`
+cuando salió `ok`, `Graphify: NO actualizado (<motivo>)` cuando salió `failed`.
+Un graph desactualizado nunca bloquea la entrega, pero tampoco se afirma lo
+contrario: si `GRAPHIFY_SYNC=failed`, el resumen dice que el grafo no se actualizó.
+<!-- anchor:end graphify-sync -->
+<!-- anchor:checksum graphify-sync sha256=944bc873a4b97dbce364848251cce132b661ba1824fc21df212d5a74b3e55932 -->
+
+Then read and follow `get-shit-done/workflows/transition.md`, passing through the `--auto` flag so it propagates to the next phase invocation.
 
 **If neither `--auto` nor `AUTO_MODE` is true:**
 
-**Graphify sync (local only, post-execution):** before presenting options, refresh
-the project knowledge graph so following phases use an updated graph. Run
-`gsd-graphify-sync` from the project root (local AST extraction via
-`gsd-grafiphy update`; no Neo4j/FalkorDB/uploads). If it fails, continue anyway
-and mention the failure in the phase summary — graph sync must never block delivery.
+<!-- anchor:begin graphify-sync -->
+**Graphify sync (verificado, nunca bloqueante):** antes de continuar, corré
+`gsd-graphify-sync` desde la raíz del proyecto. El refresh solo cuenta si el tool
+termina en 0 **y** `graphify-out/graph.json` quedó regenerado en la corrida; el tool
+imprime el veredicto en su última línea:
+
+```bash
+GRAPHIFY_SYNC=$(gsd-graphify-sync | tail -n 1 | sed 's/^GRAPHIFY_SYNC=//')
+```
+
+Reportalo en el resumen de fase con ese valor y nada más: `Graphify: actualizado`
+cuando salió `ok`, `Graphify: NO actualizado (<motivo>)` cuando salió `failed`.
+Un graph desactualizado nunca bloquea la entrega, pero tampoco se afirma lo
+contrario: si `GRAPHIFY_SYNC=failed`, el resumen dice que el grafo no se actualizó.
+<!-- anchor:end graphify-sync -->
+<!-- anchor:checksum graphify-sync sha256=944bc873a4b97dbce364848251cce132b661ba1824fc21df212d5a74b3e55932 -->
+
+Then read and follow `get-shit-done/workflows/transition.md`, passing through the `--auto` flag so it propagates to the next phase invocation.
 
 **STOP. Do not auto-advance. Do not execute transition. Do not plan next phase. Present options to the user and wait.**
 

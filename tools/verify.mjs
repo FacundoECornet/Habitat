@@ -168,14 +168,25 @@ function checkCli() {
 }
 
 function checkPlugins(home) {
-  const configPath = path.join(home, ".config", "opencode", "opencode.json");
+  const configCandidates = [
+    path.join(home, ".config", "opencode", "opencode.json"),
+    path.join(home, ".config", "opencode", "opencode.jsonc"),
+  ];
   const problems = [];
   let local = 0;
-  if (fs.existsSync(configPath)) {
-    const parsed = readJsonish(configPath);
+  let seen = new Set();
+  for (const configPath of configCandidates) {
+    if (!fs.existsSync(configPath)) continue;
+    let parsed;
+    try {
+      parsed = readJsonish(configPath);
+    } catch {
+      continue;
+    }
     const base = path.dirname(configPath);
     for (const plugin of parsed.plugin ?? []) {
-      if (typeof plugin !== "string") continue;
+      if (typeof plugin !== "string" || seen.has(plugin)) continue;
+      seen.add(plugin);
       if (plugin.startsWith(".")) {
         local += 1;
         if (!fs.existsSync(path.resolve(base, plugin))) problems.push(plugin);
@@ -185,7 +196,7 @@ function checkPlugins(home) {
   check(
     "plugins",
     problems.length === 0,
-    problems.length === 0 ? `${local} plugins locales presentes` : problems.join(", "),
+    problems.length === 0 ? `${seen.size} plugins declarados, ${local} locales presentes` : problems.join(", "),
     "un plugin local no existe: corré scripts/restore.sh y npm ci",
   );
 }
