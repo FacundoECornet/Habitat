@@ -748,35 +748,55 @@ Config changes are saved locally — no commit needed since `commit_docs` is `fa
 
 ## 5.5. Resolve Model Profile (JEv difficulty router)
 
-Use models from init: `researcher_model`, `synthesizer_model`, `roadmapper_model`.
+Models for non-routed agents come from init: `researcher_model`, `synthesizer_model`,
+`roadmapper_model`. The routed profile (easy/medium/hard) is decided by JEV, not by
+reading a table by hand.
 
-**JEv classification (closed catalog, conservative thresholds):** build a 3-6 sentence
-summary from Step 3 questioning + `.planning/PROJECT.md`, then call `jev_classify`
-with exactly these classes (descriptions verbatim from
-`~/.config/opencode/gsd-router/jev-catalog.json`):
+Build a 3-6 sentence summary from Step 3 questioning + `.planning/PROJECT.md`, then run
+the deterministic router:
 
-- `easy` = small isolated change, low ambiguity, low architectural risk → profile `easy`
-- `medium` = multiple files or moderate logic, bounded scope → profile `medium`
-- `hard` = significant architecture, cross-cutting changes, complex integrations or high uncertainty → profile `hard`
-- `manual_review` = insufficient information or unsafe classification → NEVER auto-apply
+<!-- anchor:begin gsd-jevs-route -->
+```bash
+# <habitat> = repo opencode-habitat en esta PC; tras el instalador el bin vive en ~/bin
+gsd-jevs-route "<resumen de 3-6 frases del proyecto y su alcance>"
+```
 
-Use `auto_accept >= 0.85` and `minimum_margin >= 0.5`.
+`gsd-jevs-route` (o `node <habitat>/tools/gsd-jevs-route.mjs`) hace todo lo demás:
 
-**Apply rule:**
+- Lee el catálogo cerrado de `~/.config/opencode/gsd-router/jev-catalog.json`
+  (`easy`, `medium`, `hard`, `manual_review`).
+- Llama `jev_classify` con `auto_accept >= 0.85` y `minimum_margin >= 0.5`,
+  probando los proveedores en orden `zen_free` → `typesafe` → `user`
+  (`~/.config/opencode/gsd-router/jev.json`).
+- Solo si el veredicto es `easy|medium|hard` **y** `decision == "auto"` escribe
+  `.planning/config.json` vía `tools/route.mjs` (escritura atómica:
+  `model_overrides`, `difficulty_profile`, `difficulty_source: "jev"`,
+  `difficulty_confidence`) y sincroniza `~/.gsd/router.json` **solo si** el proyecto
+  no declara `difficulty_profile` (necesario: `core.cjs` `loadConfig` fusiona el
+  router global SOBRE el config del proyecto).
+- Si JEV falla (sin key, error HTTP, timeout, `manual_review`, baja confianza/margen,
+  respuesta inválida) sale con código 2 **sin tocar ningún archivo**.
 
-- If result is `easy|medium|hard` AND `decision == "auto"` (safe to auto-accept):
-  run `JEV_PROFILE_SOURCE=jev JEV_CONFIDENCE=<top_probability> gsd-route <profile>`
-  from the project root. This writes `model_overrides` + `difficulty_profile`,
-  `difficulty_source: "jev"`, `difficulty_confidence` into `.planning/config.json`
-  AND syncs `~/.gsd/router.json` (required: `core.cjs` `loadConfig` merges the
-  global router OVER project config, so without sync the profile would be overridden).
-  Verify with `gsd-sdk query resolve-model gsd-planner` (also `gsd-executor`,
-  `gsd-verifier`) before continuing.
-- ELSE (`manual_review`, or `decision != "auto"`, or low confidence/margin):
-  do NOT change any profile. Ask the user to confirm `easy|medium|hard` (or accept
-  `manual_review` = keep current defaults) via `question`, then run `gsd-route`
-  only with the confirmed profile. Record `difficulty_source: "manual"`.
-  A low-confidence classification must NEVER silently change the profile.
+Después de correrlo, verificar antes de continuar:
+
+```bash
+gsd-sdk query resolve-model gsd-planner
+gsd-sdk query resolve-model gsd-executor
+gsd-sdk query resolve-model gsd-verifier
+```
+
+Si el router salió con código 2, **no** cambies ningún perfil: preguntar al usuario
+con `question` si quiere `easy|medium|hard` (o mantener defaults) y aplicar solo el
+perfil confirmado:
+
+```bash
+JEV_PROFILE_SOURCE=manual gsd-route <easy|medium|hard>
+```
+
+Una clasificación de baja confianza NUNCA debe cambiar el perfil en silencio.
+<!-- anchor:end gsd-jevs-route -->
+<!-- anchor:checksum gsd-jevs-route sha256=95a85a8d57f6d41f4a396228f8b9c0f578c4d81316007eb4bcbe19b76d6b65ce -->
+
 
 ## 6. Research Decision
 

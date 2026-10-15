@@ -4,7 +4,7 @@
     "gsd-planner": "opencode/muse-spark-1.3-contributor-free",
     "gsd-executor": "opencode/mimo-v2.6-flash-free",
     "gsd-verifier": "opencode-go/mimo-v2.6-pro",
-    "gsd-codebase-mapper": "opencode-go/space-bunny-free",
+    "gsd-codebase-mapper": "opencode/space-bunny-free",
     "gsd-doc-writer": "opencode-go/longcat-2.5-preview-free",
     "gsd-phase-researcher": "opencode/muse-spark-1.3-contributor-free",
     "gsd-project-researcher": "opencode/muse-spark-1.3-contributor-free",

@@ -249,7 +249,6 @@
 .config/opencode/command/gsd-workspace.md	@<HOME>/.config/opencode/get-shit-done/workflows/remove-workspace.md
 .config/opencode/get-shit-done/references/artifact-types.md	- **Location**: `<HOME>/.config/opencode/get-shit-done/USER-PROFILE.md`
 .config/opencode/get-shit-done/references/context-budget.md	The keys live in `.claude/settings.json` (project) or `<HOME>/.config/opencode/settings.json` (global) — **not** in `.planning/config.json`:
-.config/opencode/get-shit-done/references/model-profile-resolution.md	@<HOME>/.config/opencode/get-shit-done/references/model-profiles.md
 .config/opencode/get-shit-done/references/planner-mvp-mode.md	- The plan **must produce** `SKELETON.md` in the phase directory alongside `PLAN.md`. Use the template at `@<HOME>/.config/opencode/get-shit-done/references/skeleton-template.md`. `SKELETON.md` records the architectural decisions that subsequent phases will build on (chosen framework, DB, deployment target, auth approach, directory layout).
 .config/opencode/get-shit-done/references/user-profiling.md	- Full absolute file paths containing usernames (e.g., `/Users/john/...`, `<HOME>/...`)
 .config/opencode/get-shit-done/references/verification-patterns.md	**@<HOME>/.config/opencode/get-shit-done/references/checkpoints.md** → `<automation_reference>` section

@@ -1,0 +1,33 @@
+{
+  "tool": "jev_classify",
+  "transport": "mcp-stdio",
+  "mcp_command": "npx -y @jkudish/jev-mcp",
+  "timeout_ms": 25000,
+  "providers": [
+    {
+      "id": "zen_free",
+      "carrier": "compatible",
+      "api_base_url": "https://opencode.ai/inference/systemone/v1/systemone",
+      "model": "jev-1.13-free",
+      "key_env": "OPENCODE_API_KEY"
+    },
+    {
+      "id": "typesafe",
+      "carrier": "typesafe",
+      "model": "jev-latest",
+      "key_env": "TYPESAFE_API_KEY"
+    },
+    {
+      "id": "user",
+      "carrier": "compatible",
+      "api_base_url": "https://opencode.ai/inference/systemone/v1/systemone",
+      "model": "jev-1.13-free",
+      "key_env": "JEV_API_KEY"
+    }
+  ],
+  "notes": [
+    "Orden de proveedores JEV probado por gsd-jevs-route: zen_free -> typesafe -> user.",
+    "Un proveedor sin su variable de key se saltea; si ninguno responde, gsd-jevs-route sale con código 2 y no toca nada.",
+    "El proveedor 'user' acepta JEV_API_BASE_URL/JEV_MCP_MODEL en el entorno para apuntar a otro endpoint System One compatible."
+  ]
+}

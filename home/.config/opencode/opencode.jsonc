@@ -79,7 +79,17 @@
         "@jkudish/jev-mcp"
       ],
       "environment": {
-        "TYPESAFE_API_KEY": "{env:TYPESAFE_API_KEY}"
+        // Primario: OpenCode Zen (gratis, probado) como endpoint System One compatible.
+        // Requiere JEV_API_KEY en el entorno (normalmente OPENCODE_API_KEY).
+        "JEV_PROVIDER": "compatible",
+        "JEV_API_BASE_URL": "https://opencode.ai/inference/systemone/v1/systemone",
+        "JEV_API_KEY": "{env:JEV_API_KEY}",
+        "JEV_MCP_MODEL": "jev-1.13-free"
+        // Fallback validado — volver a TypeSafe:
+        //   "JEV_PROVIDER": "typesafe",
+        //   "TYPESAFE_API_KEY": "{env:TYPESAFE_API_KEY}"
+        // El router tools/gsd-jevs-route.mjs prueba zen_free -> typesafe -> user
+        // por su cuenta y no depende de esta entrada MCP.
       }
     }
   }
