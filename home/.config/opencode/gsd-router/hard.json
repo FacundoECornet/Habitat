@@ -1,0 +1,14 @@
+{
+  "name": "hard",
+  "model_overrides": {
+    "gsd-planner": "opencode-go/mimo-v2.6-pro",
+    "gsd-executor": "opencode-go/gpt-6-luna",
+    "gsd-verifier": "opencode-go/mimo-v2.6-pro",
+    "gsd-codebase-mapper": "opencode-go/space-bunny-free",
+    "gsd-doc-writer": "opencode-go/longcat-2.5-preview-free",
+    "gsd-phase-researcher": "opencode/muse-spark-1.3-contributor-free",
+    "gsd-project-researcher": "opencode/muse-spark-1.3-contributor-free",
+    "gsd-research-synthesizer": "opencode/muse-spark-1.3-contributor-free",
+    "gsd-plan-checker": "opencode-go/mimo-v2.6-pro"
+  }
+}

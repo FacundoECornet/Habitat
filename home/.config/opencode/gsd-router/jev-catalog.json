@@ -1,0 +1,24 @@
+{
+  "tool": "jev_classify",
+  "auto_accept": 0.85,
+  "minimum_margin": 0.5,
+  "catalog": [
+    {
+      "id": "easy",
+      "description": "Cambio pequeño, aislado, baja ambigüedad y bajo riesgo arquitectónico. Un archivo o dos, fix acotado, config menor. Perfil EASY."
+    },
+    {
+      "id": "medium",
+      "description": "Múltiples archivos o lógica moderada, alcance acotado. Feature dentro de estructura existente, sin cambio cross-cutting. Perfil MEDIUM."
+    },
+    {
+      "id": "hard",
+      "description": "Arquitectura significativa, cambios cross-cutting, integraciones complejas o alta incertidumbre. Sistema nuevo, migración compleja, requisitos con impacto arquitectónico. Perfil HARD."
+    },
+    {
+      "id": "manual_review",
+      "description": "Información insuficiente o clasificación insegura. Request ambiguo, falta contexto, no se puede asignar easy/medium/hard con confianza. Requiere revisión humana, NUNCA auto-aplicar perfil."
+    }
+  ],
+  "policy": "Si decision != auto o safe_to_auto_accept es false, NO aplicar perfil automáticamente: pedir revisión/confirmación al usuario. Solo easy/medium/hard con auto=true generan model_overrides vía gsd-route. manual_review siempre pide revisión."
+}
