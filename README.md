@@ -26,7 +26,7 @@ flowchart LR
         MAN[MANIFEST]
         CAP[capture.sh]
         RST[restore.sh]
-        VER[verify.sh]
+        VER[verify]
     end
     subgraph DESTINO[PC nueva WSL]
         ECO2[Ecosistema restaurado<br/>+ backup timestamped<br/>+ npm ci]
@@ -52,7 +52,27 @@ git push
 # prereqs: opencode instalado + autenticado, keys conectadas a mano
 git clone <privado-habitat> ~/code/opencode-habitat
 cd ~/code/opencode-habitat
-./scripts/restore.sh   # backup-before-overwrite + copias + npm ci + verify.sh
+./scripts/restore.sh            # backup-before-overwrite + copias + npm ci + verify
+```
+
+### 3. (Recomendado) Instalador completo en PC nueva
+
+`restore.sh` reconstruye el payload. `tools/install.mjs` además instala las herramientas
+del hábitat y verifica:
+
+```bash
+node tools/install.mjs --home "$HOME" --repo "$PWD"           # copia tools/ → ~/bin, crea jev.env, restore + verify
+node tools/install.mjs --with-deps                            # + get-shit-done-cc, context-mode, graphifyy
+node tools/install.mjs --with-gsd                             # + reinstala GSD y re-aplica los parches (checksum-verificado)
+node tools/verify.mjs                                         # VER-01/02 read-only, --json para máquinas
+```
+
+Router de dificultad JEV (perfil easy/medium/hard por proyecto):
+
+```bash
+gsd-jevs-route "<resumen de 3-6 frases del proyecto>"   # clasifica y aplica el perfil; exit 2 = no toca nada
+JEV_PROFILE_SOURCE=manual gsd-route medium              # aplicación manual
+gsd-sdk query resolve-model gsd-planner                 # verificación post-router
 ```
 
 Ver detalle visual: [docs/OVERVIEW.md](docs/OVERVIEW.md)
@@ -63,7 +83,26 @@ Ver detalle visual: [docs/OVERVIEW.md](docs/OVERVIEW.md)
 |---|---|---|
 | `habitat capture` (`scripts/capture.sh`) | Snapshot re-ejecutable al `home/` espejo | sí |
 | `habitat restore` (`scripts/restore.sh`) | Reconstruye todo, respalda `<file>.backup-<ts>` | sí, 2da corrida = no-op exit 0 |
-| `habitat verify` (`scripts/verify.sh`) | Read-only: dests existen, `opencode` responde, MCP JSON válido, skills/plugins descubribles | sí |
+| `habitat restore --verify` | Restore + verificación al final | sí |
+| `habitat verify` (`tools/verify.mjs`) | Read-only: dests existen, `opencode` responde, MCP JSON válido, skills/plugins descubribles, 54 model IDs de los 3 perfiles contra `opencode models` | sí |
+
+## Troubleshooting
+
+- **`verify` falla en `model-ids`**: sin credenciales de opencode, `opencode models` solo
+  lista los modelos públicos, así que los IDs de proveedores privados se reportan como
+  desconocidos. Autenticá (`opencode auth`) y volvé a correr (`--no-models` para saltear).
+- **Drift repo-vs-máquina**: `capture.sh --dry-run` / `restore.sh --dry-run` (read-only,
+  exit 1 = acción necesaria). Esta PC de origen queda a propósito detrás del payload hasta
+  que se corra el instalador.
+- **Colisiones**: todo destino existente se respalda como `<file>.backup-<YYYYMMDD-HHMMSS>`
+  antes de escribirse; los huérfanos en destino se preservan.
+- **Re-run**: captura, restore y verify son idempotentes; `install.mjs` es idempotente y
+  refresca los checksums de los parches que re-aplica.
+- **`gsd-jevs-route` sale con código 2**: JEV no dio veredicto automático (sin key,
+  timeout, `manual_review`, baja confianza). No se escribió nada: preguntá el perfil y
+  aplicalo con `JEV_PROFILE_SOURCE=manual gsd-route <easy|medium|hard>`.
+- **Secretos**: nunca se versionan. `install.mjs` crea `.config/opencode/jev.env` desde
+  `jev.env.example` (0600) solo si falta, y nunca escribe valores.
 
 ## Seguridad
 
