@@ -21,6 +21,11 @@ const EXIT_OK = 0;
 const EXIT_FAILED = 1;
 const EXIT_USAGE = 2;
 
+// An authenticated `opencode models` lists well over this many entries; a smaller
+// catalog (or one without the auth-gated `opencode-go/*` namespace) means the
+// registry was truncated by missing credentials, not that the ids are invalid.
+const MIN_FULL_CATALOG = 20;
+
 function parseArgs(argv) {
   const args = argv.slice(2);
   const options = {
@@ -53,6 +58,13 @@ function parseArgs(argv) {
 const results = [];
 function check(name, ok, detail, hint) {
   results.push({ name, ok, detail, hint: ok ? "" : hint ?? "" });
+}
+
+// A skipped check cannot be evaluated in this environment (missing CLI, no
+// credentials, truncated registry). It never fails the run, but it is recorded
+// so the operator sees why nothing was validated.
+function skip(name, detail, hint) {
+  results.push({ name, ok: true, skipped: true, detail, hint: hint ?? "" });
 }
 
 function stripJsonComments(text) {
@@ -130,6 +142,19 @@ function runTool(command, args, timeoutMs) {
     env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  return result;
+}
+
+// A transient network/timeout failure must not be reported as a broken id,
+// so the catalog query is retried a few times before giving up. An absent CLI
+// (ENOENT) is terminal: retrying cannot help.
+function runToolRetry(command, args, timeoutMs, attempts = 3) {
+  let result;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    result = runTool(command, args, timeoutMs);
+    if (!result.error && result.status === 0) return result;
+    if (result.error && result.error.code === "ENOENT") return result;
+  }
   return result;
 }
 
@@ -227,13 +252,23 @@ function checkModels(home, repo) {
     [path.join(home, ".config", "opencode", "gsd-router"), "home"],
     [path.join(repo, "home", ".config", "opencode", "gsd-router"), "repo"],
   ];
-  const available = runTool("opencode", ["models"], 30000);
+  const available = runToolRetry("opencode", ["models"], 30000, 3);
   if (available.error || available.status !== 0) {
-    check("model-ids", false, "`opencode models` no responde", "abrité opencode autenticado o usá --no-models");
+    skip(
+      "model-ids",
+      "no se pudo consultar `opencode models` (red/auth)",
+      "autenticá opencode (`opencode auth login`) o usá --no-models",
+    );
     return;
   }
   const known = new Set(available.stdout.split("\n").map((l) => l.trim()).filter(Boolean));
+  const hasAuthNamespace = [...known].some((id) => id.startsWith("opencode-go/"));
+  // A small catalog, or one without the auth-gated namespace, cannot validate
+  // the ids: report them as unchecked instead of inventing a failure.
+  const limited = !(known.size >= MIN_FULL_CATALOG || hasAuthNamespace);
+
   const problems = [];
+  const unverified = [];
   let checked = 0;
   for (const [routerDir, label] of candidateDirs) {
     for (const profile of ["easy", "medium", "hard"]) {
@@ -242,16 +277,31 @@ function checkModels(home, repo) {
       const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
       for (const [agent, model] of Object.entries(parsed.model_overrides ?? {})) {
         checked += 1;
-        if (!known.has(model)) problems.push(`${label}/${profile}:${agent}=${model}`);
+        if (known.has(model)) continue;
+        if (limited) unverified.push(`${label}/${profile}:${agent}=${model}`);
+        else problems.push(`${label}/${profile}:${agent}=${model}`);
       }
     }
   }
-  check(
-    "model-ids",
-    problems.length === 0,
-    problems.length === 0 ? `${checked} ids válidos` : problems.join("; "),
-    "reemplazá los ids inválidos en gsd-router/*.json (ver `opencode models`)",
-  );
+
+  if (problems.length > 0) {
+    check(
+      "model-ids",
+      false,
+      problems.join("; "),
+      "reemplazá los ids inválidos en gsd-router/*.json (ver `opencode models`)",
+    );
+    return;
+  }
+  if (unverified.length > 0) {
+    skip(
+      "model-ids",
+      `${checked - unverified.length}/${checked} ids válidos; ${unverified.length} sin verificar (catálogo limitado)`,
+      "autenticá opencode (`opencode auth login`) para validar el catálogo completo",
+    );
+    return;
+  }
+  check("model-ids", true, `${checked} ids válidos`);
 }
 
 function main() {
@@ -270,9 +320,9 @@ function main() {
     process.stdout.write(`${JSON.stringify({ ok: failed.length === 0, checks: results }, null, 2)}\n`);
   } else {
     for (const result of results) {
-      const mark = result.ok ? "ok  " : "FAIL";
+      const mark = !result.ok ? "FAIL" : result.skipped ? "skip" : "ok  ";
       process.stdout.write(`${mark} ${result.name}: ${result.detail}\n`);
-      if (!result.ok && result.hint) process.stdout.write(`     hint: ${result.hint}\n`);
+      if ((!result.ok || result.skipped) && result.hint) process.stdout.write(`     hint: ${result.hint}\n`);
     }
   }
 
