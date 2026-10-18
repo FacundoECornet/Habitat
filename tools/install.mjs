@@ -20,6 +20,9 @@ import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
 
 const EXIT_OK = 0;
 const EXIT_FAILED = 1;
@@ -46,6 +49,7 @@ function parseArgs(argv) {
     withGsd: false,
     skipRestore: false,
     skipVerify: false,
+    skipPlugins: false,
     dryRun: false,
     verifyArgs: [],
   };
@@ -58,16 +62,19 @@ function parseArgs(argv) {
     else if (arg === "--with-gsd") options.withGsd = true;
     else if (arg === "--skip-restore") options.skipRestore = true;
     else if (arg === "--skip-verify") options.skipVerify = true;
+    else if (arg === "--skip-plugins") options.skipPlugins = true;
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--no-models" || arg === "--no-cli") options.verifyArgs.push(arg);
     else if (arg === "-h" || arg === "--help") {
       process.stdout.write(
         [
           "Usage: install.mjs [--home DIR] [--repo DIR] [--with-deps] [--with-gsd]",
-          "                  [--skip-restore] [--skip-verify] [--dry-run] [--no-models] [--no-cli]",
+          "                  [--skip-restore] [--skip-verify] [--skip-plugins] [--dry-run]",
+          "                  [--no-models] [--no-cli]",
           "",
           "Sin --with-deps/--with-gsd solo copia tools/, crea jev.env (si falta),",
-          "restaura el MANIFEST y verifica. Nada se borra: todo se respalda antes.",
+          "asegura context-mode, restaura el MANIFEST y verifica. Nada se borra:",
+          "todo se respalda antes.",
         ].join("\n"),
       );
       process.exit(EXIT_OK);
@@ -136,10 +143,7 @@ function detectPlatform() {
 
 function installDeps(options) {
   log("deps", "instalando dependencias globales declaradas");
-  const commands = [
-    ["npm", ["install", "-g", DEPS.gsd]],
-    ["npm", ["install", "-g", DEPS.contextMode]],
-  ];
+  const commands = [["npm", ["install", "-g", DEPS.gsd]]];
   for (const [command, args] of commands) {
     if (run(command, args, { capture: true }).status !== 0) {
       fail(`${command} ${args.join(" ")} falló`);
@@ -159,6 +163,45 @@ function installDeps(options) {
       }
     }
   }
+  return true;
+}
+
+function npmGlobalRoot() {
+  const result = run("npm", ["root", "-g"], { capture: true });
+  if (result.status !== 0) return null;
+  const root = (result.stdout ?? "").trim().split("\n").filter(Boolean).pop();
+  return root ? root.trim() : null;
+}
+
+// opencode loads a bare plugin name as an npm package from the config dir's
+// node_modules or from the global npm root.
+function pluginResolved(name, home) {
+  const configDir = path.join(home, ".config", "opencode");
+  try {
+    require.resolve(name, { paths: [configDir] });
+    return true;
+  } catch {
+    const globalRoot = npmGlobalRoot();
+    return globalRoot ? fs.existsSync(path.join(globalRoot, name, "package.json")) : false;
+  }
+}
+
+// context-mode is declared as an npm plugin in opencode.jsonc; without it the
+// plugin silently fails to load. It is ensured on every run (not only
+// --with-deps) but the failure is non-fatal: restore still completes and
+// tools/verify.mjs reports the missing plugin by name.
+function ensurePlugins(options) {
+  if (pluginResolved("context-mode", options.home)) {
+    log("plugins", "context-mode ya resoluble (local o global)");
+    return true;
+  }
+  log("plugins", `instalando ${DEPS.contextMode}`);
+  const result = run("npm", ["install", "-g", DEPS.contextMode], { capture: true });
+  if (result.status !== 0) {
+    fail(`${DEPS.contextMode} no se pudo instalar (npm falló); verify lo reportará`);
+    return false;
+  }
+  log("plugins", "context-mode instalado globalmente");
   return true;
 }
 
@@ -348,7 +391,7 @@ function main() {
     if (options.dryRun) log("deps", "dry-run: se instalarían " + JSON.stringify(DEPS));
     else if (!installDeps(options)) process.exit(EXIT_FAILED);
   } else {
-    log("deps", "omitido (usar --with-deps para get-shit-done-cc, context-mode, graphifyy)");
+    log("deps", "omitido (usar --with-deps para get-shit-done-cc y graphifyy)");
   }
 
   if (options.withGsd) {
@@ -370,6 +413,10 @@ function main() {
 
   if (!copyBin(options)) process.exit(EXIT_FAILED);
   if (!ensureJevEnv(options)) process.exit(EXIT_FAILED);
+
+  if (options.skipPlugins) log("plugins", "omitido (--skip-plugins)");
+  else if (options.dryRun) log("plugins", "dry-run: se verificaría/instalaría context-mode");
+  else ensurePlugins(options);
 
   if (options.skipRestore) log("restore", "omitido");
   else if (!options.dryRun && !restoreManifest(options)) process.exit(EXIT_FAILED);

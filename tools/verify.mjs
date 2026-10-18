@@ -16,6 +16,9 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
 
 const EXIT_OK = 0;
 const EXIT_FAILED = 1;
@@ -198,8 +201,11 @@ function checkPlugins(home) {
     path.join(home, ".config", "opencode", "opencode.jsonc"),
   ];
   const problems = [];
+  const missingNpm = [];
   let local = 0;
-  let seen = new Set();
+  let npm = 0;
+  const seen = new Set();
+  const globalRoot = npmGlobalRoot();
   for (const configPath of configCandidates) {
     if (!fs.existsSync(configPath)) continue;
     let parsed;
@@ -215,15 +221,42 @@ function checkPlugins(home) {
       if (plugin.startsWith(".")) {
         local += 1;
         if (!fs.existsSync(path.resolve(base, plugin))) problems.push(plugin);
+      } else {
+        npm += 1;
+        if (!resolveNpmPlugin(plugin, base, globalRoot)) missingNpm.push(plugin);
       }
     }
   }
+  const failures = [...problems, ...missingNpm.map((p) => `${p} (npm)`)];
   check(
     "plugins",
-    problems.length === 0,
-    problems.length === 0 ? `${seen.size} plugins declarados, ${local} locales presentes` : problems.join(", "),
-    "un plugin local no existe: corré scripts/restore.sh y npm ci",
+    failures.length === 0,
+    failures.length === 0
+      ? `${seen.size} plugins declarados (${local} locales, ${npm} npm)`
+      : `no resuelven: ${failures.join(", ")}`,
+    missingNpm.length > 0
+      ? `instalá el paquete npm faltante (npm i -g ${missingNpm.join(" ")}@<versión>) o corré node tools/install.mjs`
+      : "un plugin local no existe: corré scripts/restore.sh y npm ci",
   );
+}
+
+function npmGlobalRoot() {
+  const result = runTool("npm", ["root", "-g"], 20000);
+  if (result.error || result.status !== 0) return null;
+  const root = (result.stdout ?? "").trim().split("\n").filter(Boolean).pop();
+  return root ? root.trim() : null;
+}
+
+// A bare plugin name is an npm package. opencode resolves it from the config
+// directory's node_modules or from the global npm root, so either location
+// counts as installed.
+function resolveNpmPlugin(name, base, globalRoot) {
+  try {
+    require.resolve(name, { paths: [base] });
+    return true;
+  } catch {
+    return globalRoot ? fs.existsSync(path.join(globalRoot, name, "package.json")) : false;
+  }
 }
 
 function checkDiscovery(home) {
