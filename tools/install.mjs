@@ -7,9 +7,9 @@
 //   3. gsd         optional (--with-gsd): run the GSD installer, then re-apply the
 //                  anchored §5.5 patch and the $HOME path sanitization, both
 //                  checksum-verified (a mismatch is reported, never silently patched)
-//   4. bin         copy tools/* to <home>/bin with a timestamped backup
+//   4. bin         copy tools/*.mjs to <home>/bin (POSIX) or <home>/bin/*.mjs + *.cmd (win32)
 //   5. jevenv      create ~/.config/opencode/jev.env from jev.env.example if absent
-//   6. restore     scripts/restore.sh
+//   6. restore     tools/restore.mjs (single Node engine; scripts/restore.sh is a shim)
 //   7. verify      tools/verify.mjs
 //
 // The installer never writes credentials: jev.env is only created when absent and
@@ -21,12 +21,14 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { planBin, cmdShim } from "../lib/bins.mjs";
 
 const require = createRequire(import.meta.url);
 
 const EXIT_OK = 0;
 const EXIT_FAILED = 1;
 const EXIT_USAGE = 2;
+const IS_WIN = process.platform === "win32";
 
 const DEPS = {
   gsd: "get-shit-done-cc@1.42.3",
@@ -38,8 +40,8 @@ const ABSOLUTE_BIN_RE =
   /(^|[\s"'`(:=])(\/[^\s"'`);|&]+\/get-shit-done\/bin\/(gsd-tools\.cjs|install\.js))/g;
 
 // tools/*.mjs → ~/bin/<name>; a few commands are documented under a different
-// name than their source file (route.mjs is the gsd-route CLI).
-const BIN_NAME_OVERRIDES = { "route.mjs": "gsd-route" };
+// name than their source file (route.mjs is the gsd-route CLI). The plan lives
+// in lib/bins.mjs so it can be unit-tested without touching the filesystem.
 
 function parseArgs(argv) {
   const options = {
@@ -145,6 +147,24 @@ function detectPlatform() {
   return { family: "unknown", arch, notes: "plataforma no reconocida" };
 }
 
+function executableOnPath(name) {
+  const dirs = (process.env.PATH || "").split(path.delimiter);
+  const exts = IS_WIN ? ["", ".exe", ".cmd", ".bat"] : [""];
+  for (const dir of dirs) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      const candidate = path.join(dir, name + ext);
+      try {
+        const stat = fs.statSync(candidate);
+        if (!stat.isFile()) continue;
+        if (!IS_WIN) fs.accessSync(candidate, fs.constants.X_OK);
+        return candidate;
+      } catch { /* keep looking */ }
+    }
+  }
+  return null;
+}
+
 function installDeps(options) {
   log("deps", "instalando dependencias globales declaradas");
   const commands = [["npm", ["install", "-g", DEPS.gsd]]];
@@ -153,6 +173,14 @@ function installDeps(options) {
       fail(`${command} ${args.join(" ")} falló`);
       return false;
     }
+  }
+  // graphifyy is a Python tool (uv/pipx/pip). On Windows without any Python it
+  // is skipped with a hint: graphify is optional and gsd-graphify-sync degrades
+  // gracefully (W2/D3). npm deps above still install.
+  const hasPython = executableOnPath("python") || executableOnPath("python3") || executableOnPath("py");
+  if (IS_WIN && !hasPython) {
+    log("deps", "graphifyy omitido: Windows sin Python — graphify es opcional (D3)");
+    return true;
   }
   const graphify = run("uv", ["tool", "install", DEPS.graphify], { capture: true });
   if (graphify.status !== 0) {
@@ -328,17 +356,22 @@ function copyBin(options) {
   const source = path.join(options.repo, "tools");
   const binDir = path.join(options.home, "bin");
   if (!options.dryRun && !fs.existsSync(binDir)) fs.mkdirSync(binDir, { recursive: true });
+  const plan = planBin(fs.readdirSync(source), process.platform);
   const copied = [];
-  for (const entry of fs.readdirSync(source)) {
-    if (!entry.endsWith(".mjs")) continue;
-    const base = BIN_NAME_OVERRIDES[entry] ?? entry.replace(/\.mjs$/, "");
-    const target = path.join(binDir, base);
-    if (!options.dryRun) {
-      if (fs.existsSync(target)) backupFile(target, options.home);
-      fs.copyFileSync(path.join(source, entry), target);
-      fs.chmodSync(target, 0o755);
+  for (const item of plan) {
+    for (const target of item.targets) {
+      const targetPath = path.join(binDir, target.name);
+      if (!options.dryRun) {
+        if (fs.existsSync(targetPath)) backupFile(targetPath, options.home);
+        if (target.kind === "shim") {
+          fs.writeFileSync(targetPath, cmdShim(item.base), "utf8");
+        } else {
+          fs.copyFileSync(path.join(source, item.source), targetPath);
+          if (!IS_WIN) fs.chmodSync(targetPath, 0o755);
+        }
+      }
+      copied.push(target.name);
     }
-    copied.push(path.basename(target));
   }
   if (options.dryRun) log("bin", `dry-run: se copiarían ${copied.length} herramientas a ${binDir}`);
   else log("bin", `${copied.length} herramientas copiadas a ${binDir}`);

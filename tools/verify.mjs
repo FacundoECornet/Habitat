@@ -138,12 +138,33 @@ function checkMcp(home, repo) {
   );
 }
 
+// On win32 the opencode launcher ships as opencode.cmd / opencode.exe; its
+// opencode.ps1 is unusable without changing ExecutionPolicy. Prefer an explicit
+// .exe/.cmd/.bat on PATH and never hand a .ps1 to spawn.
+function resolveExecutable(command) {
+  if (process.platform !== "win32") return command;
+  if (command.includes("/") || command.includes("\\")) return command;
+  for (const dir of (process.env.PATH || "").split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of [".exe", ".cmd", ".bat"]) {
+      const candidate = path.join(dir, command + ext);
+      try {
+        if (fs.statSync(candidate).isFile()) return candidate;
+      } catch { /* keep looking */ }
+    }
+  }
+  return command;
+}
+
 function runTool(command, args, timeoutMs) {
-  const result = spawnSync(command, args, {
+  const win = process.platform === "win32";
+  const resolved = resolveExecutable(command);
+  const result = spawnSync(win ? `"${resolved}"` : resolved, args, {
     encoding: "utf8",
     timeout: timeoutMs,
     env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
+    shell: win,
   });
   return result;
 }
