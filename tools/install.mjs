@@ -294,7 +294,12 @@ function patchedGsdStep(options) {
     const destAnchors = extractAnchors(fs.readFileSync(destPath, "utf8"));
     if (repoAnchors.length === 0) continue;
     if (destAnchors.length === 0) {
-      problems.push(`${relative}: sin anclas (el instalador reescribió el archivo)`);
+      // The real GSD installer rewrites these files without Habitat's managed
+      // blocks. That is not tampering: the manifest restore reconciles the whole
+      // file from the payload (which carries the anchors), so warn and move on
+      // instead of failing the entire install. Only a real checksum mismatch on
+      // an existing anchor block stays fail-closed.
+      warn(`parche diferido — ${relative}: sin anclas (el instalador GSD reescribió el archivo; restore lo reconcilia desde el payload)`);
       continue;
     }
     const checksumOf = (body) => `sha256=${sha256(body)}`;
