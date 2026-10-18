@@ -14,6 +14,20 @@ Habitat versiona y restaura un ecosistema de OpenCode —configuración, GSD, ag
 
 Se requieren **Git**, **Node.js 22.22.2+ / 24.15+ / 26+ y npm** y **OpenCode** en el mismo entorno donde ejecutarás Habitat. El motor de restore es Node.js puro: Windows nativo no necesita WSL, Bash, `rsync` ni coreutils para instalar y restaurar. La captura del snapshot (`scripts/capture.sh`) es una herramienta de desarrollo y sí requiere **Bash**, **rsync** y **coreutils** (`sha256sum`, `realpath`). Las versiones de Node reflejan el engine del lockfile actual. También necesitas acceso al repo privado.
 
+**Qué hace falta para cada parte del ecosistema:**
+
+| Para… | Necesitás |
+|---|---|
+| Instalar y restaurar (core) | Git + Node.js/npm + OpenCode. Nada más. |
+| Router JEV (`gsd-jevs-route`) + perfiles | OpenCode autenticado y, opcionalmente, una key `TYPESAFE_API_KEY` en `~/.config/opencode/jev.env` (sin key, aplicás perfil a mano). |
+| GSD (`get-shit-done-cc`) | `--with-gsd` (usa `npx`). |
+| **Graphify** | **Python 3** en `PATH` (`pip`/`pipx` disponibles). Con `--with-deps` se instala `graphifyy`; **sin Python, el instalador lo omite con un aviso** y el resto del framework funciona igual, solo sin el grafo. |
+| `context-mode` (plugin) | `--with-deps` (o `npm i -g`); el instalador también lo asegura. |
+| `verify` completo (**6/6**) | Todo lo anterior + `opencode auth login` (para `model-ids`). |
+| Capturar el snapshot | Bash + `rsync` + coreutils (solo máquina de desarrollo). |
+
+O sea: el **framework queda operativo con solo Git+Node+OpenCode**; Python es lo único extra para tener **Graphify**.
+
 #### Windows (PowerShell nativo)
 
 En una terminal PowerShell, con Git, Node.js y OpenCode ya instalados:
@@ -87,7 +101,7 @@ El repo es privado: GitHub debe autenticarte por SSH o HTTPS para que `git clone
 La instalación completa:
 
 1. Detecta SO y arquitectura.
-2. Con `--with-deps`, instala `get-shit-done-cc`, `context-mode` y Graphify.
+2. Con `--with-deps`, instala `get-shit-done-cc`, `context-mode` y Graphify (Graphify requiere **Python 3**; sin él se omite con aviso).
 3. Con `--with-gsd`, instala GSD y reaplica los bloques Habitat solo si sus checksums coinciden.
 4. Copia las herramientas ejecutables a `~/bin` (crea backup si ya existen).
 5. Crea `jev.env` desde el ejemplo solo si falta.
@@ -219,6 +233,7 @@ Revisar los cambios, confirmar que no contienen secretos y luego hacer commit/pu
 
 - **`restore: rsync required` / `sha256sum required` (solo en la captura):** son dependencias de `capture.sh`, no del restore. El motor de restore es Node.js puro; para capturar instala `rsync` + coreutils (en macOS agrega `gnubin` al `PATH` como se muestra arriba).
 - **Node anterior a 22.22.2 / 24.15 / 26 o `npm` ausente:** actualiza Node.js y vuelve a ejecutar la instalación.
+- **`graphify` no responde o se omitió al instalar:** falta **Python 3**. Instalalo y `pipx install graphifyy` (o `pip install graphifyy==0.9.14`), luego `node tools/install.mjs --with-deps`. El resto del framework funciona igual sin Graphify.
 - **`verify` falla en `model-ids`:** autentica OpenCode (`opencode auth login`) y reintenta. Si solo quieres omitir esa comprobación, usa `--no-models`.
 - **`gsd-jevs-route` devuelve código `2`:** no se aplicó ningún perfil; revisa una key JEV o selecciona perfil manualmente con `JEV_PROFILE_SOURCE=manual gsd-route <easy|medium|hard>`.
 - **Drift repo-vs-máquina:** `capture.sh --dry-run` y `restore.sh --dry-run` muestran diferencias sin escribir. Exit `1` significa que hay acciones pendientes.
