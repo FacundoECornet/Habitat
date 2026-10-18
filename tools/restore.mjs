@@ -62,20 +62,36 @@ if (!HOME) {
   process.exit(2);
 }
 
-// Prefer the external `realpath` (honors a PATH shim, preserves test V); fall
-// back to Node's own canonicalization when it is unavailable.
+// Resolve the canonical HOME. On POSIX prefer the external `realpath` (honors a
+// PATH shim, preserves test V), then Node's native canonicalization. On win32
+// the external tool is skipped and `realpathSync.native` yields the case-folded
+// long path (W3).
 function resolveHome() {
-  const r = spawnSync("realpath", [HOME], { encoding: "utf8" });
-  if (r.status === 0 && r.stdout && r.stdout.trim()) return r.stdout.trim();
-  try { return fs.realpathSync(HOME); } catch { return null; }
+  if (process.platform !== "win32") {
+    const r = spawnSync("realpath", [HOME], { encoding: "utf8" });
+    if (r.status === 0 && r.stdout && r.stdout.trim()) return r.stdout.trim();
+  }
+  try {
+    const native = fs.realpathSync.native ?? fs.realpathSync;
+    return native(HOME);
+  } catch { return null; }
 }
 const homeReal = resolveHome();
 if (!homeReal) {
   err("restore: home-unresolved (cannot canonicalize HOME: " + HOME + ") (D-16)");
   process.exit(2);
 }
-if (homeReal === "/mnt/c" || homeReal.startsWith("/mnt/c/")) {
+
+// Reject a live root sitting on a Windows mount or WSL share: a drvfs/UNC home
+// breaks the executable bit, the case-folded boundary and the backup renames
+// (D-16). Normalize separators so both POSIX and win32 spellings are caught.
+const homeNorm = homeReal.replace(/\\/g, "/").toLowerCase();
+if (homeNorm === "/mnt/c" || homeNorm.startsWith("/mnt/c/")) {
   err("restore: home-on-drvfs (" + homeReal + ") — refusing before any write (D-16)");
+  process.exit(2);
+}
+if (homeNorm.startsWith("//wsl$/") || homeNorm.startsWith("//wsl.localhost/")) {
+  err("restore: home-on-wsl-share (" + homeReal + ") — usá un home nativo, no \\\\wsl$ (D-16)");
   process.exit(2);
 }
 
@@ -174,8 +190,12 @@ if (!DRY_RUN) {
 
 // --- shared run state -------------------------------------------------------
 function externalDate(fmt, fallback) {
-  const r = spawnSync("date", ["-u", fmt], { encoding: "utf8" });
-  if (r.status === 0 && r.stdout && r.stdout.trim()) return r.stdout.trim();
+  // Only POSIX `date` understands GNU format strings, and the tests shim it
+  // there; on win32 use the JS fallback directly.
+  if (process.platform !== "win32") {
+    const r = spawnSync("date", ["-u", fmt], { encoding: "utf8" });
+    if (r.status === 0 && r.stdout && r.stdout.trim()) return r.stdout.trim();
+  }
   return fallback();
 }
 function jsStamp() {
@@ -359,15 +379,24 @@ function backupPath(target) {
 function exists(p) { try { fs.lstatSync(p); return true; } catch { return false; } }
 function lstat(p) { try { return fs.lstatSync(p); } catch { return null; } }
 
+// A path is inside HOME when path.relative does not escape it. Case-insensitive
+// comparison is unnecessary here: both sides come from the same HOME value.
+function relFromHome(p) {
+  const rel = path.relative(HOME, p);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return null;
+  return rel;
+}
+
 // --- create a destination directory, backing up any blocking component ------
 function ensureDir(target) {
   if (target === HOME) return true;
-  let rel = target.startsWith(HOME + "/") ? target.slice(HOME.length + 1) : target;
-  const parts = rel.split("/");
+  const rel = relFromHome(target);
+  if (rel === null) return true;
+  const parts = rel.split(path.sep);
   let cur = HOME;
   for (const comp of parts) {
-    if (!comp) continue;
-    cur = cur + "/" + comp;
+    if (!comp || comp === ".") continue;
+    cur = path.join(cur, comp);
     const st = lstat(cur);
     if (st && st.isSymbolicLink()) {
       if (!backupPath(cur)) return false;
@@ -410,7 +439,7 @@ function inspectReal(s, d) {
 // --- dry-run: read-only classification of a single destination path ---------
 function inspectDry(s, d) {
   const st = lstat(d);
-  const disp = d.startsWith(HOME + "/") ? d.slice(HOME.length + 1) : d;
+  const disp = relFromHome(d) ?? d;
   if (st && (st.isSymbolicLink() || !st.isFile())) {
     ENT_CHANGED += 1; actionNeeded = true;
     out("  changed " + disp);
@@ -459,12 +488,12 @@ function entryDirReal(src, dstDir, patterns) {
     const rel = item.rel;
     if (isExcluded(rel, patterns, src)) {
       if (machineLocal(rel)) {
-        out("skipped machine-local: " + shellQuote(dstDir + "/" + rel));
+        out("skipped machine-local: " + shellQuote(path.join(dstDir, rel)));
         ENT_SKIPPED += 1;
       }
       continue;
     }
-    const dfile = dstDir + "/" + rel;
+    const dfile = path.join(dstDir, rel);
     if (item.isDir) {
       if (!ensureDir(dfile)) { aborted = true; continue; }
       continue;
@@ -489,7 +518,7 @@ function entryDirReal(src, dstDir, patterns) {
     if (item.isDir) continue;
     const rel = item.rel;
     if (isExcluded(rel, patterns, src)) continue;
-    const dfile = dstDir + "/" + rel;
+    const dfile = path.join(dstDir, rel);
     if (!exists(dfile)) {
       try {
         fs.copyFileSync(item.abs, dfile);
@@ -515,17 +544,17 @@ function entryDirDry(src, dstDir, patterns) {
     const rel = item.rel;
     if (isExcluded(rel, patterns, src)) {
       if (machineLocal(rel)) {
-        out("  skipped machine-local " + shellQuote(dstDir + "/" + rel));
+        out("  skipped machine-local " + shellQuote(path.join(dstDir, rel)));
         ENT_SKIPPED += 1;
       }
       continue;
     }
-    const dfile = dstDir + "/" + rel;
+    const dfile = path.join(dstDir, rel);
     if (item.isDir) {
       const st = lstat(dfile);
       if (st && (st.isSymbolicLink() || !st.isDirectory())) {
         ENT_CHANGED += 1; actionNeeded = true;
-        out("  changed " + (dfile.startsWith(HOME + "/") ? dfile.slice(HOME.length + 1) : dfile));
+        out("  changed " + (relFromHome(dfile) ?? dfile));
       }
       continue;
     }
