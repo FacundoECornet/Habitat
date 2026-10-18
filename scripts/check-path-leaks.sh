@@ -218,6 +218,10 @@ report() { printf 'LEAK: rule=%s path=%s line=%s\n' "$1" "$2" "$3" >&2; }
 
 scan_content() {
   local path="$1" content="$2" i name ere out rc ln lineno text key
+  # F-10 effect 4: a Windows CRLF checkout leaves a trailing CR on every line,
+  # which would break the exact-line allowlist comparison and false-red the scan.
+  # Strip CR so detection and allowlisting see the same LF-normalized text.
+  content="${content//$'\r'/}"
   for i in "${!RULE_NAMES[@]}"; do
     name="${RULE_NAMES[$i]}"
     ere="${RULE_ERES[$i]}"
