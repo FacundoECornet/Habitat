@@ -364,10 +364,10 @@ function ensureJevEnv(options) {
 }
 
 function restoreManifest(options) {
-  const script = path.join(options.repo, "scripts", "restore.sh");
-  const result = run("bash", [script], { cwd: options.repo, env: { ...process.env, HOME: options.home } });
+  const engine = path.join(options.repo, "tools", "restore.mjs");
+  const result = run(process.execPath, [engine], { cwd: options.repo, env: { ...process.env, HOME: options.home } });
   if (result.status !== 0) {
-    fail("scripts/restore.sh falló");
+    fail("tools/restore.mjs falló");
     return false;
   }
   return true;
