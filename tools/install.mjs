@@ -34,6 +34,10 @@ const DEPS = {
 const ABSOLUTE_BIN_RE =
   /(^|[\s"'`(:=])(\/[^\s"'`);|&]+\/get-shit-done\/bin\/(gsd-tools\.cjs|install\.js))/g;
 
+// tools/*.mjs → ~/bin/<name>; a few commands are documented under a different
+// name than their source file (route.mjs is the gsd-route CLI).
+const BIN_NAME_OVERRIDES = { "route.mjs": "gsd-route" };
+
 function parseArgs(argv) {
   const options = {
     home: os.homedir(),
@@ -280,7 +284,8 @@ function copyBin(options) {
   const copied = [];
   for (const entry of fs.readdirSync(source)) {
     if (!entry.endsWith(".mjs")) continue;
-    const target = path.join(binDir, entry.replace(/\.mjs$/, ""));
+    const base = BIN_NAME_OVERRIDES[entry] ?? entry.replace(/\.mjs$/, "");
+    const target = path.join(binDir, base);
     if (!options.dryRun) {
       if (fs.existsSync(target)) backupFile(target, options.home);
       fs.copyFileSync(path.join(source, entry), target);
