@@ -267,10 +267,27 @@ function checkDiscovery(home) {
     [path.join(home, ".agents", "skills"), ".agents/skills"],
   ];
   const counts = [];
+  const skillRoots = new Map();
   for (const [root, label] of roots) {
     if (!fs.existsSync(root)) continue;
     const entries = fs.readdirSync(root).filter((name) => !name.startsWith("."));
     counts.push(`${label}=${entries.length}`);
+    if (!label.endsWith("/skills")) continue;
+    for (const name of entries) {
+      if (!skillRoots.has(name)) skillRoots.set(name, new Set());
+      skillRoots.get(name).add(label);
+    }
+  }
+  const duplicates = [...skillRoots.entries()].filter(([, labels]) => labels.size > 1);
+  if (duplicates.length > 0) {
+    const detail = duplicates.map(([name, labels]) => `${name} (${[...labels].join(", ")})`).join("; ");
+    check(
+      "discovery",
+      false,
+      `skill duplicada entre roots: ${detail}`,
+      "una skill debe vivir en un solo root: quitá el duplicado (p.ej. el symlink vivo ~/.claude/skills/<name>)",
+    );
+    return;
   }
   check(
     "discovery",
