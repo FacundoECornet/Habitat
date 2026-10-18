@@ -123,8 +123,9 @@ function fail(message) {
 
 function run(command, args, options = {}) {
   // Windows spawns .cmd/.bat shims (npm, opencode) only through cmd.exe; on
-  // win32 spawnSync without a shell fails with ENOENT (same as restore.mjs).
-  const result = spawnSync(IS_WIN ? `"${command}"` : command, args, {
+  // win32 spawnSync without a shell fails (EINVAL/ENOENT), same as restore.mjs.
+  // The command stays bare: quoting it makes cmd.exe mis-parse the args.
+  const result = spawnSync(command, args, {
     encoding: "utf8",
     stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
     cwd: options.cwd,
