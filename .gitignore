@@ -19,10 +19,8 @@
 **/*secret*
 
 # --- tracked source whose name merely contains "secret" (not a secret) ---
-# The broad **/*secret* guard above would otherwise hide the shared detector
-# library and its regression suite; re-include these exact paths only.
+# The broad **/*secret* guard would otherwise hide the shared detector library.
 !lib/secret-scan.sh
-!tests/pre-commit-secret.sh
 
 # --- generated / reinstallable (rebuilt by `npm ci`) ---
 **/node_modules/
@@ -63,6 +61,12 @@ home/.azure
 **/*.db-shm
 **/gsd-router.backup/
 **/gsd-router/backup-*
+
+# --- maintainer-only material (kept locally, excluded from user checkouts) ---
+/.planning/
+/INVENTORY.md
+/docs/OVERVIEW.md
+/tests/
 
 # --- GSD ephemeral ---
 .planning/.gsd-state-tmp/
