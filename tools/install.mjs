@@ -90,8 +90,12 @@ function log(step, message) {
   process.stdout.write(`[${step}] ${message}\n`);
 }
 
-function fail(message) {
+function warn(message) {
   process.stderr.write(`install: ${message}\n`);
+}
+
+function fail(message) {
+  warn(message);
 }
 
 function run(command, args, options = {}) {
@@ -418,8 +422,12 @@ function main() {
   else if (options.dryRun) log("plugins", "dry-run: se verificaría/instalaría context-mode");
   else ensurePlugins(options);
 
-  if (options.skipRestore) log("restore", "omitido");
-  else if (!options.dryRun && !restoreManifest(options)) process.exit(EXIT_FAILED);
+  if (options.skipRestore) {
+    log("restore", "omitido (--skip-restore)");
+    warn("--skip-restore deja el home sin restaurar; tools/verify.mjs va a fallar por destinos faltantes");
+  } else if (!options.dryRun && !restoreManifest(options)) {
+    process.exit(EXIT_FAILED);
+  }
 
   if (options.skipVerify) {
     log("verify", "omitido");

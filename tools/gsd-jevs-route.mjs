@@ -77,15 +77,22 @@ function repoRoot() {
   const candidates = [];
   if (process.env.GSD_HABITAT_ROOT) candidates.push(process.env.GSD_HABITAT_ROOT);
   candidates.push(path.resolve(import.meta.dirname, ".."));
-  const installed = path.dirname(fs.realpathSync(path.join(routerDir(), "jev.json")));
-  const marker = `${path.sep}home${path.sep}.config${path.sep}opencode${path.sep}gsd-router${path.sep}`;
-  if (installed.includes(marker)) {
-    candidates.push(installed.split(marker)[0]);
+  try {
+    const installed = path.dirname(fs.realpathSync(path.join(routerDir(), "jev.json")));
+    const marker = `${path.sep}home${path.sep}.config${path.sep}opencode${path.sep}gsd-router${path.sep}`;
+    if (installed.includes(marker)) {
+      candidates.push(installed.split(marker)[0]);
+    }
+  } catch {
+    // jev.json absent (router not installed yet): fall back to the other candidates.
   }
   for (const candidate of candidates) {
     if (fs.existsSync(path.join(candidate, "tools", "route.mjs"))) return candidate;
   }
-  warn("gsd-jevs-route: no se encontró tools/route.mjs (root del repo habitat)");
+  warn(
+    "gsd-jevs-route: no se encontró tools/route.mjs (root del repo habitat) — " +
+      "corré `node tools/install.mjs` desde el repo",
+  );
   process.exit(EXIT_NOT_APPLIED);
 }
 
@@ -285,7 +292,11 @@ async function main() {
     providers = Array.isArray(config.providers) ? config.providers : [];
     catalog = readJsonFile(path.join(dir, "jev-catalog.json"));
   } catch (error) {
-    warn(`gsd-jevs-route: no se pudo leer la configuración del router: ${error.message}`);
+    const hint =
+      error && error.code === "ENOENT"
+        ? " — corré `node tools/install.mjs` para instalar la configuración del router"
+        : "";
+    warn(`gsd-jevs-route: no se pudo leer la configuración del router: ${error.message}${hint}`);
     process.exit(EXIT_NOT_APPLIED);
   }
 
