@@ -367,7 +367,16 @@ function copyBin(options) {
     for (const target of item.targets) {
       const targetPath = path.join(binDir, target.name);
       if (!options.dryRun) {
-        if (fs.existsSync(targetPath)) backupFile(targetPath, options.home);
+        // Replace whatever is there, including a symlink: writing through a
+        // symlinked target would silently mutate its destination and leave the
+        // command pointing at the wrong file (F-12). Unlink a symlink after
+        // backing it up, then write a fresh regular file.
+        let present = false;
+        try { fs.lstatSync(targetPath); present = true; } catch { present = false; }
+        if (present) {
+          backupFile(targetPath, options.home);
+          if (fs.lstatSync(targetPath).isSymbolicLink()) fs.unlinkSync(targetPath);
+        }
         if (target.kind === "shim") {
           fs.writeFileSync(targetPath, cmdShim(item.base), "utf8");
         } else {
