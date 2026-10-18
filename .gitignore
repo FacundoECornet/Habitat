@@ -71,3 +71,11 @@ home/.azure
 # The GSD-native store under .planning/graphs/ IS versioned; the local
 # graphify-out/ layer is machine state (5MB+ of derived JSON).
 graphify-out/
+
+# Archify working receipts are regenerated; keep authored candidates and HTML diagrams.
+.archify/**/review-*/
+.archify/**/*.finalize.json
+.archify/**/*.finalize-summary.json
+.archify/**/*.browser-check.json
+.archify/**/*.delivery.json
+.archify/**/*.delivery-pending.json

@@ -1,339 +1,117 @@
-# OpenCode Habitat 🌿
+<p align="center">
+  <img src="assets/logotipo-horizontal-color.svg" alt="OpenCode Habitat" width="620">
+</p>
 
-Habitat versiona y restaura un ecosistema de OpenCode —configuración, GSD, agentes, skills, MCPs, plugins y herramientas— en otra máquina. Usa un manifiesto explícito, copias con backup y verificación al final.
+<h1 align="center">Tu entorno de OpenCode, listo en cualquier máquina.</h1>
 
-`capture` → actualiza el snapshot del repo · `install/restore` → reconstruye el entorno · `verify` → comprueba que quedó operativo.
+<p align="center">
+  Configuración, GSD, agentes y herramientas sincronizados con backups y verificación.
+</p>
 
-![status](https://img.shields.io/badge/status-operativo-green) ![platforms](https://img.shields.io/badge/instalador-Windows%20%7C%20WSL%20%7C%20Linux%20%7C%20macOS-blue) ![tech](https://img.shields.io/badge/tech-Node.js%20%2B%20Bash-green)
+<p align="center">
+  <img alt="Windows, Linux, macOS y WSL" src="https://img.shields.io/badge/Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20WSL-compatible-3478c7">
+  <img alt="Node.js 22.22.2, 24.15 o 26+" src="https://img.shields.io/badge/Node.js-22.22.2%20%7C%2024.15%20%7C%2026%2B-43853d">
+  <img alt="PowerShell y Bash" src="https://img.shields.io/badge/PowerShell%20%7C%20Bash-supported-6b6b6b">
+</p>
 
-> **Recomendación por sistema:** Windows → PowerShell nativo (7/10/11) o WSL 2 + Ubuntu; Linux → terminal Bash; macOS → Bash con Homebrew. El instalador y el motor de restore son Node.js, así que los cuatro entornos comparten la misma ruta de reconstrucción. La captura (`capture.sh`) sigue siendo una herramienta de desarrollo para máquinas con Bash + rsync.
+Habitat restaura tu entorno de OpenCode desde un manifiesto controlado. Copia solo rutas permitidas, conserva tus archivos anteriores y comprueba que la instalación quedó lista.
 
-## Instalación desde una terminal nueva
+## Empezar
 
-### 1. Preparar el sistema
+Necesitas **[Git](https://git-scm.com/downloads)**, **[Node.js/npm](https://nodejs.org/en/download)** y **[OpenCode](https://opencode.ai/docs/)** instalados. Usa Node.js **22.22.2+**, **24.15+** o **26+**. Inicia sesión en OpenCode antes de instalar.
 
-Se requieren **Git**, **Node.js 22.22.2+ / 24.15+ / 26+ y npm** y **OpenCode** en el mismo entorno donde ejecutarás Habitat. El motor de restore es Node.js puro: Windows nativo no necesita WSL, Bash, `rsync` ni coreutils para instalar y restaurar. La captura del snapshot (`scripts/capture.sh`) es una herramienta de desarrollo y sí requiere **Bash**, **rsync** y **coreutils** (`sha256sum`, `realpath`). Las versiones de Node reflejan el engine del lockfile actual. También necesitas acceso al repo privado.
+El repositorio requiere acceso de GitHub. Elige tu terminal:
 
-**Qué hace falta para cada parte del ecosistema:**
+<details>
+<summary><strong>Windows · PowerShell</strong></summary>
 
-| Para… | Necesitás |
-|---|---|
-| Instalar y restaurar (core) | Git + Node.js/npm + OpenCode. Nada más. |
-| Router JEV (`gsd-jevs-route`) + perfiles | OpenCode autenticado y, opcionalmente, una key `TYPESAFE_API_KEY` en `~/.config/opencode/jev.env` (sin key, aplicás perfil a mano). |
-| GSD (`get-shit-done-cc`) | `--with-gsd` (usa `npx`). |
-| **Graphify** | **Python 3** en `PATH` (`pip`/`pipx` disponibles). Con `--with-deps` se instala `graphifyy`; **sin Python, el instalador lo omite con un aviso** y el resto del framework funciona igual, solo sin el grafo. |
-| `context-mode` (plugin) | `--with-deps` (o `npm i -g`); el instalador también lo asegura. |
-| `verify` completo (**6/6**) | Todo lo anterior + `opencode auth login` (para `model-ids`). |
-| Capturar el snapshot | Bash + `rsync` + coreutils (solo máquina de desarrollo). |
-
-O sea: el **framework queda operativo con solo Git+Node+OpenCode**; Python es lo único extra para tener **Graphify**.
-
-#### Windows (PowerShell nativo)
-
-En una terminal PowerShell, con Git, Node.js y OpenCode ya instalados:
+No necesitas WSL.
 
 ```powershell
-mkdir $HOME\code -Force
-git clone https://github.com/FacundoECornet/Habitat.git $HOME\code\habitat
-cd $HOME\code\habitat
+New-Item -ItemType Directory -Force "$HOME\code" | Out-Null
+git clone https://github.com/FacundoECornet/Habitat.git "$HOME\code\habitat"
+Set-Location "$HOME\code\habitat"
+opencode auth login
 powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -WithDeps -WithGsd
 ```
 
-`bootstrap.ps1` verifica Node/npm/Git, ejecuta `tools/install.mjs` (deps, GSD, restore y verify), agrega `%USERPROFILE%\bin` al `PATH` de usuario y recuerda autenticar OpenCode. Los binarios de `bin/` se instalan como `<nombre>.mjs` más un shim `<nombre>.cmd`, ejecutable desde PowerShell y `cmd.exe`. No hace falta tocar `/mnt/c`: clona en el disco de Windows (por ejemplo `C:\code\habitat`).
+</details>
 
-#### Instalar en una máquina corporativa (seguro y reversible)
+<details>
+<summary><strong>Linux · macOS · WSL 2</strong></summary>
 
-Habitat **no toca la red corporativa, el firewall, el proxy ni ninguna política de sistema**. Todo lo que escribe vive bajo `%USERPROFILE%` (`bin`, `lib\model-pick.mjs`, `.config\opencode`, `.claude`, `.agents`, `.gsd`, `.opencode`, `.habitat\backups` y `.habitat\repo-root`); el único cambio "de sistema" es agregar `%USERPROFILE%\bin` al **PATH de usuario** (registro HKCU, no HKLM). Los paquetes npm globales (`get-shit-done-cc`, `context-mode`) van al *npm prefix* — per-usuario si Node es per-usuario. La red solo se **lee** (registro npm + `opencode`).
-
-Secuencia recomendada para no arriesgar nada:
-
-```powershell
-# 1. Ver el plan sin escribir nada (read-only)
-node tools\install.mjs --dry-run
-
-# 2. Core sin instalaciones globales: valida Git + Node + OpenCode + store/restore
-node tools\install.mjs
-
-# 3. Comprobar (plugins puede fallar solo por context-mode ausente: esperado)
-node tools\verify.mjs
-
-# 4. Cuando quieras, sumar globales per-usuario (GSD, context-mode, Graphify) y auth
-node tools\install.mjs --with-deps --with-gsd
-opencode auth login
-node tools\verify.mjs            # → 6/6
-```
-
-Si el *npm prefix* es de sistema y no querés tocar `Program Files`, fijalo a tu usuario (sin admin):
-
-```powershell
-npm config set prefix "$env:APPDATA\npm"
-```
-
-Reversión segura:
-
-```powershell
-# desinstalá solo si Habitat agregó estos paquetes (no si ya estaban antes)
-npm uninstall -g get-shit-done-cc context-mode
-# primero restaura cualquier archivo anterior desde sus *.backup-<timestamp> o ~/.habitat/backups
-# luego, para quitar solo el selector (preserva otros archivos/carpetas del usuario):
-# si restauraste un archivo de esta lista, quita esa ruta del Remove-Item de abajo
-Remove-Item "$env:USERPROFILE\bin\gsd-model-pick.mjs","$env:USERPROFILE\bin\gsd-model-pick.cmd","$env:USERPROFILE\lib\model-pick.mjs","$env:USERPROFILE\.config\opencode\gsd-router\picks.local","$env:USERPROFILE\.habitat\repo-root" -Force -ErrorAction SilentlyContinue
-# quitá %USERPROFILE%\bin del PATH de usuario solo si bootstrap.ps1 lo agregó
-```
-
-Para revertir toda la instalación, recupera primero archivos respaldados antes de borrar rutas gestionadas; no borres recursivamente `.config\opencode`, `bin` o `.habitat` si ya contenían archivos tuyos.
-
-#### Windows (alternativa: WSL 2 + Ubuntu)
-
-En PowerShell, instala Ubuntu si WSL aún no está configurado y reinicia si Windows lo solicita:
-
-```powershell
-wsl --install -d Ubuntu
-```
-
-Abre Ubuntu desde el menú Inicio y, dentro de esa terminal Linux, instala las herramientas base:
-
-```bash
-sudo apt update
-sudo apt install -y git bash rsync coreutils
-```
-
-Instala una versión compatible de Node.js (22.22.2+, 24.15+ o 26+) desde [Node.js](https://nodejs.org/en/download) y OpenCode **dentro de Ubuntu/WSL** siguiendo sus instrucciones oficiales: [OpenCode — instalación](https://opencode.ai/docs/). No ejecutes esta instalación desde `/mnt/c`: usa el filesystem Linux (`~/code/habitat`) para evitar problemas de permisos y rendimiento.
-
-> OpenCode y Habitat instalados en Windows y en WSL son entornos distintos. WSL es la alternativa cuando querés un toolchain POSIX para desarrollo; para uso diario en Windows, PowerShell nativo (arriba) es el camino soportado y validado de extremo a extremo.
-
-#### Linux (Debian / Ubuntu)
-
-```bash
-sudo apt update
-sudo apt install -y git bash rsync coreutils
-```
-
-Instala una versión compatible de Node.js (22.22.2+, 24.15+ o 26+) y npm desde [Node.js](https://nodejs.org/en/download), y OpenCode según sus instrucciones oficiales: [OpenCode — instalación](https://opencode.ai/docs/). En distribuciones donde el paquete del sistema sea anterior a esas versiones, instala Node desde el sitio oficial antes de continuar.
-
-#### macOS
-
-Instala Xcode Command Line Tools si aún no tienes Git y Homebrew si no está instalado. Luego:
-
-```bash
-brew install git node rsync coreutils
-export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
-```
-
-Ese `PATH` hace visibles `sha256sum` y `realpath` de GNU coreutils para la herramienta de captura (`capture.sh`). Mantén la terminal Bash abierta para la instalación. Instala OpenCode siguiendo [OpenCode — instalación](https://opencode.ai/docs/).
-
-### 2. Clonar, autenticar e instalar
-
-En Windows nativo usa `.\bootstrap.ps1` (ver arriba). En WSL, Linux o macOS, desde una terminal Bash:
+Instala Git, Node.js/npm y OpenCode siguiendo sus guías oficiales. En WSL, ejecuta todo desde la terminal Linux y guarda el repo en `~/code`, no en `/mnt/c`.
 
 ```bash
 mkdir -p ~/code
 git clone https://github.com/FacundoECornet/Habitat.git ~/code/habitat
 cd ~/code/habitat
-
-# Autenticar OpenCode en este mismo entorno antes de verificar modelos
 opencode auth login
-
-# Instalación completa: dependencias, GSD, restore del manifiesto y verify
 node tools/install.mjs --with-deps --with-gsd
 ```
 
-El repo es privado: GitHub debe autenticarte por SSH o HTTPS para que `git clone` funcione. El instalador crea `~/.config/opencode/jev.env` desde la plantilla si no existe; **no escribe credenciales**. Para habilitar clasificación JEV, añade en ese archivo una key propia (`TYPESAFE_API_KEY`) y abre una terminal Bash nueva. Sin credenciales JEV, la instalación funciona, pero el router de dificultad no cambia el perfil y devuelve código `2` de forma segura.
+</details>
 
-La instalación completa:
-
-1. Detecta SO y arquitectura.
-2. Antes de instalar, en TTY ofrece elegir modelos para cada agente y perfil (`easy`, `medium`, `hard`); con overlay guardado no vuelve a preguntar.
-3. Con `--with-deps`, instala `get-shit-done-cc`, `context-mode` y Graphify (Graphify requiere **Python 3**; sin él se omite con aviso).
-4. Con `--with-gsd`, instala GSD y reaplica los bloques Habitat solo si sus checksums coinciden.
-5. Copia las herramientas ejecutables a `~/bin` (crea backup si ya existen).
-6. Crea `jev.env` desde el ejemplo solo si falta.
-7. Restaura las rutas permitidas por `MANIFEST.json`, ejecuta `npm ci` cuando los lockfiles cambiaron y respalda archivos que va a reemplazar.
-8. Ejecuta `tools/verify.mjs` y reporta resultados.
-
-### Elegir modelos de perfiles GSD
-
-En una instalación interactiva sin preferencias previas, Habitat recorre perfiles `easy` → `medium` → `hard` y pregunta modelo por agente. El modelo actual aparece como default: **Enter** lo mantiene, `!` vuelve al default del repo, `*` salta lo restante del perfil y `q` salta lo restante de todos los perfiles. Escribí un ID `proveedor/modelo` para cambiarlo. Atajo opcional `@writer=proveedor/modelo` aplica ese modelo a los agentes del grupo visible en el perfil actual; también existen `@planner=`, `@executor=` y `@checker=`. Los grupos ordenan la lista, no asignan modelos automáticamente.
-
-Las selecciones se guardan en `~/.config/opencode/gsd-router/picks.local`, overlay local JSON que no se captura ni se reemplaza con restore. Los perfiles base del repo quedan intactos; `gsd-route` mezcla overlay al aplicar easy/medium/hard. En instalaciones siguientes se conserva sin volver a preguntar; usa `--pick-models` para abrir el selector de nuevo. `--no-pick-models` omite una selección nueva, pero conserva el overlay guardado.
-
-Para instalación no interactiva, `--models-file` aplica archivo JSON sin prompts. Podés exportar la matriz completa, editar las celdas que quieras y aplicarla:
-
-```bash
-node tools/gsd-model-pick.mjs --export-models ./my-models.json
-# editar easy/medium/hard → agente: "proveedor/modelo"
-node tools/install.mjs --models-file ./my-models.json
-```
-
-El CLI también permite editar una celda o un grupo directamente:
-
-```bash
-gsd-model-pick --profile medium --agent gsd-planner --model proveedor/modelo
-gsd-model-pick --profile hard --role writer --model proveedor/modelo
-gsd-model-pick --list
-```
-
-IDs con formato inválido se rechazan al elegirlos; `verify` comprueba IDs disponibles en `opencode models` para los perfiles efectivos del home.
-
-Para restaurar sin instalar dependencias globales ni GSD:
-
-```bash
-node tools/install.mjs
-```
-
-> El instalador no instala OpenCode ni realiza el login del proveedor; esos pasos son previos. Los flags `--with-deps` y `--with-gsd` habilitan los componentes adicionales.
-
-### 3. Comprobar la instalación
+El instalador restaura la configuración y ejecuta una verificación al final. Puedes volver a comprobarla cuando quieras:
 
 ```bash
 node tools/verify.mjs
-node tools/verify.mjs --json          # salida para scripts
-node tools/verify.mjs --no-models     # omite consulta de catálogo de modelos
 ```
 
-`verify` revisa destinos del manifiesto, configuración MCP, herramientas CLI, plugins locales, descubrimiento de skills/agentes e IDs de modelos de los perfiles. Si aún no hay autenticación de OpenCode, `--no-models` permite omitir esa consulta.
+> **¿Solo quieres restaurar el entorno?** Ejecuta `node tools/install.mjs` sin flags. `--with-deps` instala herramientas opcionales; `--with-gsd` instala GSD.
 
-## Cómo trabaja Habitat
+## GSD + JEV, en pocas palabras
 
-### Esquema de componentes
+JEV estima la dificultad del proyecto y Habitat asigna un perfil de modelos a los agentes GSD. Si la clasificación no es segura, no cambia nada: puedes elegir perfil manualmente.
 
 ```mermaid
 flowchart LR
-    subgraph Ecosistema["Entorno fuente: $HOME"]
-        OC[OpenCode: config, MCP, plugins]
-        GSD[GSD: workflows, agentes, perfiles]
-        SK[Skills y configuración compartida]
-    end
-    subgraph Repo["Repositorio Habitat"]
-        M[MANIFEST.json]
-        H[home/: snapshot permitido]
-        C[capture.sh]
-        I[install.mjs + restore.sh]
-        V[verify.mjs]
-    end
-    subgraph Destino["Entorno destino"]
-        R[Copias en $HOME]
-        N[npm ci si lockfiles cambiaron]
-        OK[Verify + entorno listo]
-    end
-    OC --> M
-    GSD --> M
-    SK --> M
-    M --> C --> H
-    H --> I --> R --> N --> V --> OK
+    A[Proyecto o tarea] -->|resumen| B[JEV clasifica dificultad]
+    B --> C{Decisión automática<br/>confianza ≥ 0.85<br/>margen ≥ 0.50}
+    C -->|sí| D[Perfil easy · medium · hard]
+    C -->|no / error / duda| E[Revisión humana]
+    D -->|aplicar| F[Asignar modelos por agente]
+    E -->|perfil confirmado| F
+    F --> G[Agentes GSD usan esos modelos]
 ```
 
-`MANIFEST.json` es la fuente de verdad: enumera ocho raíces aprobadas, origen/destino, exclusiones y pasos posteriores. El payload vive bajo `home/` como espejo de `$HOME`. Habitat copia archivos (no usa symlinks), conserva archivos locales y huérfanos, crea backups timestamped antes de reemplazar contenido y no borra destinos.
-
-### Tecnologías
-
-| Tecnología | Uso |
+| Perfil | Para qué sirve |
 |---|---|
-| Git | Versionado del snapshot y distribución desde el repo privado. |
-| Bash | Captura, validación del manifiesto y controles de seguridad (desarrollo). |
-| Node.js / npm | Instalador multiplataforma, motor de restore (`tools/restore.mjs`), router JEV, herramientas GSD/Graphify, verificación y reconstrucción de dependencias desde lockfiles. |
-| rsync + coreutils | Copias selectivas, comparación por checksum y utilidades de la captura (`capture.sh`, solo desarrollo). |
-| GSD (get-shit-done-cc) | Flujos de trabajo de proyecto, planificación y ejecución por fases. |
-| JEV | Clasificación de dificultad y selección controlada de perfiles Easy/Medium/Hard. |
-| Graphify | Grafo local del proyecto, refrescado y verificado al cerrar una fase GSD. |
-| OpenCode | Runtime de agentes, modelos, plugins y servidores MCP. |
+| `easy` | Cambios pequeños y de bajo riesgo. |
+| `medium` | Funcionalidad acotada o varios archivos. |
+| `hard` | Cambios de arquitectura, transversales o inciertos. |
 
-No se versionan `node_modules`, binarios generados, backups ni credenciales. Las dependencias se reconstruyen desde manifests/lockfiles o se instalan con el instalador.
-
-## Flujo de trabajo GSD
-
-GSD organiza el trabajo del **proyecto donde lo uses**; sus artefactos (`.planning/`) pertenecen a ese proyecto, no al repo Habitat.
-
-1. **Inicializar proyecto:** `/gsd-new-project` pregunta por objetivo y alcance; puede investigar la base de código y produce artefactos como `PROJECT.md`, `REQUIREMENTS.md` y `ROADMAP.md`.
-2. **Elegir perfil de modelos:** durante el flujo de proyecto, `gsd-jevs-route` clasifica un resumen y propone `easy`, `medium` o `hard`. Solo aplica automáticamente con veredicto aceptado y umbrales de confianza/margen cumplidos. Si JEV falla o la respuesta es ambigua, sale con código `2` sin modificar archivos; el perfil se puede elegir manualmente.
-3. **Preparar una fase:** GSD discute el alcance y crea contexto, investigación y planes (`CONTEXT.md`, `RESEARCH.md`, `PLAN.md`) en `.planning/phases/`.
-4. **Ejecutar:** `/gsd-execute-phase <fase>` ejecuta planes por waves según dependencias y configuración, registra resúmenes por plan y conserva el estado en `.planning/STATE.md`.
-5. **Verificar y cerrar:** GSD contrasta lo implementado con los planes/requisitos y genera evidencia de cierre. Al final `gsd-graphify-sync` actualiza el grafo y solo informa `Graphify: actualizado` si el archivo se regeneró; si falla, el resumen indica que no se actualizó.
-6. **Continuar:** consultar `/gsd-progress` y preparar la siguiente fase del roadmap.
-
-Atajos del router:
+JEV aplica un perfil solo con decisión automática y confianza/margen suficientes. Si no, pide revisión. La clasificación automática requiere un proveedor JEV configurado; también puedes elegir perfil manualmente:
 
 ```bash
-gsd-jevs-route "Resumen de 3–6 frases del proyecto y su alcance"
-JEV_PROFILE_SOURCE=manual gsd-route medium  # easy | medium | hard
-gsd-sdk query resolve-model gsd-planner     # consultar modelo efectivo
-gsd-graphify-sync                           # refresco/verificación manual
+gsd-route medium
 ```
 
-Detalle visual de componentes y flujos: [docs/OVERVIEW.md](docs/OVERVIEW.md).
+Abre o descarga el [diagrama interactivo de Archify](.archify/workflow-gsd-jev-perfiles-20261018-050739/workflow-gsd-jev-perfiles.html).
 
-## Capturar cambios y publicar el snapshot
+## Qué hace Habitat
 
-En la máquina fuente, revisar primero el diff en modo lectura:
+- **Restaura** configuración, skills, agentes, plugins y herramientas declaradas.
+- **Protege** archivos existentes con copias de respaldo antes de reemplazarlos.
+- **Verifica** destinos, plugins, herramientas y modelos configurados.
+- **Mantiene** credenciales y archivos locales fuera del snapshot.
 
-```bash
-./scripts/capture.sh --dry-run
-./scripts/capture.sh
-git status
-```
+Graphify es opcional y requiere Python 3. Sin Python, el resto de Habitat sigue funcionando.
 
-Revisar los cambios, confirmar que no contienen secretos y luego hacer commit/push. El hook pre-commit y el scanner bloquean patrones de credenciales; no reemplazan la revisión del diff.
+## Ayuda rápida
 
-## Comandos y utilidades
+- **Falta acceso al clonar:** inicia sesión en GitHub con una cuenta autorizada para el repositorio.
+- **`verify` falla en modelos:** ejecuta `opencode auth login` y vuelve a correr `node tools/verify.mjs`.
+- **JEV no aplica perfil:** revisa la configuración del proveedor o usa `gsd-route easy|medium|hard`.
+- **`graphify` no está disponible:** instala Python 3 y vuelve a ejecutar `node tools/install.mjs --with-deps`.
 
-| Comando | Función |
+## Requisitos por tarea
+
+| Tarea | Requisito adicional |
 |---|---|
-| `./scripts/capture.sh [--dry-run]` | Sincroniza los paths del manifiesto desde el home al snapshot. El dry-run es read-only. |
-| `./scripts/restore.sh [--dry-run] [--verify]` | Restaura el snapshot al home (shim del motor Node; corre en Windows/WSL/Linux/macOS). |
-| `.\bootstrap.ps1 [-WithDeps] [-WithGsd]` | Arranque en Windows nativo: instalación completa + `PATH` de usuario. |
-| `node tools/install.mjs [opciones]` | Instala herramientas, restaura, permite elegir modelos en TTY y ejecuta verify. Flags: `--pick-models`, `--no-pick-models`, `--models-file FILE`, `--yes`. |
-| `gsd-model-pick [opciones]` | Edita la matriz de modelos por agente/perfil; admite `--list`, `--export-models FILE` y opciones por celda/grupo. |
-| `node tools/verify.mjs [--json] [--no-models] [--no-cli]` | Verificación funcional, read-only. |
-| `gsd-jevs-route "resumen"` | Clasifica dificultad y aplica perfil solo con decisión automática válida. |
-| `gsd-route <easy\|medium\|hard>` | Aplica perfil manual confirmado. |
-| `gsd-graphify-sync` | Regenera el grafo y confirma que se actualizó. |
+| Usar Habitat en Windows | PowerShell 5.1+; WSL no es necesario. |
+| Usar GSD | Instala con `--with-gsd`. |
+| Instalar Graphify | Python 3; se instala con `--with-deps`. |
+| Capturar cambios para mantener el snapshot | Bash, `rsync` y GNU coreutils. |
 
-## Seguridad y recuperación
-
-- **Allowlist por manifiesto:** solo se copian las ocho raíces declaradas en `MANIFEST.json`.
-- **Secretos fuera del repo:** `jev.env`, tokens, `.git-credentials` y `.claude.json` no forman parte del payload. `jev.env.example` contiene nombres de variables, no valores.
-- **Defensa por capas:** exclusiones del manifiesto, `.gitignore`, scanner fail-closed y hook pre-commit.
-- **Backups antes de cambios:** los destinos modificados se renombran con sufijo `.backup-<timestamp>`; el instalador guarda sus copias bajo `~/.habitat/backups/`.
-- **Idempotencia:** capture, restore e install pueden reejecutarse; en estado convergido, restore no modifica archivos.
-- **No destructivo:** restore no elimina archivos locales, huérfanos ni `*.local`.
-
-## Troubleshooting
-
-- **`restore: rsync required` / `sha256sum required` (solo en la captura):** son dependencias de `capture.sh`, no del restore. El motor de restore es Node.js puro; para capturar instala `rsync` + coreutils (en macOS agrega `gnubin` al `PATH` como se muestra arriba).
-- **Node anterior a 22.22.2 / 24.15 / 26 o `npm` ausente:** actualiza Node.js y vuelve a ejecutar la instalación.
-- **`graphify` no responde o se omitió al instalar:** falta **Python 3**. Instalalo y `pipx install graphifyy` (o `pip install graphifyy==0.9.14`), luego `node tools/install.mjs --with-deps`. El resto del framework funciona igual sin Graphify.
-- **`verify` falla en `model-ids`:** autentica OpenCode (`opencode auth login`) y reintenta. Si solo quieres omitir esa comprobación, usa `--no-models`.
-- **`gsd-jevs-route` devuelve código `2`:** no se aplicó ningún perfil; revisa una key JEV o selecciona perfil manualmente con `JEV_PROFILE_SOURCE=manual gsd-route <easy|medium|hard>`.
-- **Cambiar modelos elegidos:** ejecuta `gsd-model-pick` (o `node tools/gsd-model-pick.mjs` desde el repo); para automatizar, exporta/edita matriz y pasa `--models-file FILE` a `tools/install.mjs`.
-- **Drift repo-vs-máquina:** `capture.sh --dry-run` y `restore.sh --dry-run` muestran diferencias sin escribir. Exit `1` significa que hay acciones pendientes.
-- **Conflictos durante restore:** usa los archivos `.backup-<timestamp>` para recuperar la versión anterior; los archivos huérfanos del destino se preservan.
-- **El comando `gsd-*` no aparece:** confirma que `~/bin` está en `PATH` o invoca el script con `node tools/<nombre>.mjs` desde el repo.
-
-## Estructura del repositorio
-
-```text
-Habitat/
-├── README.md                 # instalación, arquitectura y flujos
-├── bootstrap.ps1             # arranque en Windows nativo (PowerShell)
-├── MANIFEST.json             # declaración de los paths gestionados
-├── home/                     # espejo allowlisted del home
-├── scripts/                  # captura, restore (shim) y validación
-├── tools/                    # instalador, motor de restore, router JEV, Graphify y verify (Node.js)
-├── lib/                      # lector de manifiesto y scanner de secretos
-├── tests/                    # suites Bash y Node.js
-├── docs/OVERVIEW.md          # diagramas de arquitectura
-└── .planning/                # planes, estado y reportes GSD de Habitat
-```
-
-## Verificación de desarrollo
-
-Desde Linux, WSL o macOS con Bash, Node.js, `rsync` y coreutils:
-
-```bash
-for t in manifest-contract exclusion-rules restore restore-live-inputs capture path-leaks pre-commit-secret; do
-  bash "tests/$t.sh" || exit 1
-done
-node --test tests/router-flow.mjs tests/install-verify.mjs tests/graphify-sync.mjs tests/restore-node.mjs tests/model-pick.mjs
-```
-
-Las suites `restore-node`, `router-flow`, `install-verify` y `graphify-sync` son Node.js puro y también corren en Windows nativo (`node --test`); las suites Bash son de desarrollo POSIX.
+<sub>OpenCode no se instala ni autentica desde Habitat. Esos pasos se hacen una vez en cada entorno.</sub>

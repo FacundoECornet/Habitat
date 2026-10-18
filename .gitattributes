@@ -30,3 +30,14 @@ home/.config/opencode/get-shit-done/command/gsd-import.md text eol=lf
 # Dotfiles restaurados que bash consume
 home/.bashrc text eol=lf
 home/.gitconfig text eol=lf
+
+# Keep maintainer planning and inventory out of `git archive` release bundles.
+# These files remain visible to repository collaborators on GitHub.
+.planning/** export-ignore
+graphify-out/** export-ignore
+INVENTORY.md export-ignore
+docs/OVERVIEW.md export-ignore
+tests/** export-ignore
+
+# Preserve Archify-delivered HTML bytes; generated whitespace is part of its receipt.
+.archify/**/*.html whitespace=-blank-at-eol
