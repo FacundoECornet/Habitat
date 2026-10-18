@@ -89,6 +89,7 @@ const ALLOWLIST = new Map([
 // Every entry must declare the full structural denylist (D-07/D-08/D-10).
 const REQUIRED_EXCLUDES = [
   'node_modules/', 'bin/', '*.tar.gz', '*.tgz', '*.tar', '*.zip', '*.bak*',
+  '*.backup-*',
   'opencode-backup/', 'opencode-backup-*.tar.gz', 'agents.bak-*',
   'jev.env', '.git-credentials', '.claude.json', '.git/', '*.local',
   '*.db', '*.db-wal', '*.db-shm'
