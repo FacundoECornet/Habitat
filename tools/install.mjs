@@ -3,14 +3,15 @@
 //
 // Phases (each skippable, each idempotent):
 //   1. detect      OS/arch detection (Windows native / WSL / Linux / macOS)
-//   2. deps        optional (--with-deps): npm globals + graphifyy
-//   3. gsd         optional (--with-gsd): run the GSD installer, then re-apply the
+//   2. models      choose per-agent/profile preferences before installation
+//   3. deps        optional (--with-deps): npm globals + graphifyy
+//   4. gsd         optional (--with-gsd): run the GSD installer, then re-apply the
 //                  anchored §5.5 patch and the $HOME path sanitization, both
 //                  checksum-verified (a mismatch is reported, never silently patched)
-//   4. bin         copy tools/*.mjs to <home>/bin (POSIX) or <home>/bin/*.mjs + *.cmd (win32)
-//   5. jevenv      create ~/.config/opencode/jev.env from jev.env.example if absent
-//   6. restore     tools/restore.mjs (single Node engine; scripts/restore.sh is a shim)
-//   7. verify      tools/verify.mjs
+//   5. bin         copy tools/*.mjs to <home>/bin (POSIX) or <home>/bin/*.mjs + *.cmd (win32)
+//   6. jevenv      create ~/.config/opencode/jev.env from jev.env.example if absent
+//   7. restore     tools/restore.mjs (single Node engine; scripts/restore.sh is a shim)
+//   8. verify      tools/verify.mjs
 //
 // The installer never writes credentials: jev.env is only created when absent and
 // only carries names. Backups are timestamped siblings; nothing is deleted.
@@ -22,6 +23,7 @@ import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { planBin, cmdShim } from "../lib/bins.mjs";
+import { mergeOverlay, readModelFile, readProfiles, repoPointerPath } from "../lib/model-pick.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -52,6 +54,10 @@ function parseArgs(argv) {
     skipRestore: false,
     skipVerify: false,
     skipPlugins: false,
+    pickModels: true,
+    forcePickModels: false,
+    modelsFile: null,
+    yes: false,
     dryRun: false,
     verifyArgs: [],
   };
@@ -65,6 +71,19 @@ function parseArgs(argv) {
     else if (arg === "--skip-restore") options.skipRestore = true;
     else if (arg === "--skip-verify") options.skipVerify = true;
     else if (arg === "--skip-plugins") options.skipPlugins = true;
+    else if (arg === "--pick-models") {
+      options.pickModels = true;
+      options.forcePickModels = true;
+    } else if (arg === "--no-pick-models") {
+      options.pickModels = false;
+      options.forcePickModels = false;
+    } else if (arg === "--models-file") {
+      if (!args[i + 1] || args[i + 1].startsWith("--")) {
+        process.stderr.write("install: --models-file requiere una ruta\n");
+        process.exit(EXIT_USAGE);
+      }
+      options.modelsFile = path.resolve(args[++i]);
+    } else if (arg === "--yes") options.yes = true;
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--no-models" || arg === "--no-cli") options.verifyArgs.push(arg);
     else if (arg === "-h" || arg === "--help") {
@@ -72,11 +91,13 @@ function parseArgs(argv) {
         [
           "Usage: install.mjs [--home DIR] [--repo DIR] [--with-deps] [--with-gsd]",
           "                  [--skip-restore] [--skip-verify] [--skip-plugins] [--dry-run]",
+          "                  [--pick-models|--no-pick-models] [--models-file FILE] [--yes]",
           "                  [--no-models] [--no-cli]",
           "",
           "Sin --with-deps/--with-gsd solo copia tools/, crea jev.env (si falta),",
-          "asegura context-mode, restaura el MANIFEST y verifica. Nada se borra:",
-          "todo se respalda antes.",
+          "asegura context-mode, restaura el MANIFEST y verifica. En TTY ofrece elegir",
+          "modelos; las elecciones locales guardadas quedan disponibles para gsd-route.",
+          "Nada se borra: archivos reemplazados se respaldan antes.",
         ].join("\n"),
       );
       process.exit(EXIT_OK);
@@ -126,6 +147,38 @@ function backupFile(filePath, home) {
   const backupPath = path.join(backupDir, path.basename(filePath));
   fs.copyFileSync(filePath, backupPath);
   return backupPath;
+}
+
+function rememberRepo(options) {
+  const file = repoPointerPath(options.home);
+  const contents = `${path.resolve(options.repo)}\n`;
+  let temporary = null;
+  try {
+    if (fs.readFileSync(file, "utf8") === contents) return true;
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      fail(`no se pudo leer ${file}: ${error.message}`);
+      return false;
+    }
+  }
+  try {
+    if (fs.existsSync(file)) {
+      if (!fs.lstatSync(file).isFile()) throw new Error("destino no es archivo regular");
+      backupFile(file, options.home);
+    }
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    temporary = `${file}.tmp-${process.pid}-${Date.now()}`;
+    fs.writeFileSync(temporary, contents, { encoding: "utf8", flag: "wx" });
+    fs.renameSync(temporary, file);
+    temporary = null;
+    return true;
+  } catch (error) {
+    if (temporary) {
+      try { fs.rmSync(temporary, { force: true }); } catch {}
+    }
+    fail(`no se pudo guardar la ruta del repo Habitat: ${error.message}`);
+    return false;
+  }
 }
 
 function sha256(text) {
@@ -392,6 +445,38 @@ function copyBin(options) {
   return true;
 }
 
+function copyModelPickerSupport(options) {
+  const source = path.join(options.repo, "lib", "model-pick.mjs");
+  const targetDir = path.join(options.home, "lib");
+  const target = path.join(targetDir, "model-pick.mjs");
+  if (options.dryRun) {
+    log("bin", `dry-run: se copiaría módulo de soporte a ${target}`);
+    return true;
+  }
+  let temporary = null;
+  try {
+    if (fs.existsSync(target) && !fs.lstatSync(target).isSymbolicLink() &&
+        fs.readFileSync(target).equals(fs.readFileSync(source))) return true;
+    if (fs.existsSync(target)) {
+      backupFile(target, options.home);
+      if (fs.lstatSync(target).isSymbolicLink()) fs.unlinkSync(target);
+    }
+    fs.mkdirSync(targetDir, { recursive: true });
+    temporary = `${target}.tmp-${process.pid}-${Date.now()}`;
+    fs.copyFileSync(source, temporary, fs.constants.COPYFILE_EXCL);
+    fs.renameSync(temporary, target);
+    temporary = null;
+    log("bin", `módulo de soporte copiado a ${target}`);
+    return true;
+  } catch (error) {
+    if (temporary) {
+      try { fs.rmSync(temporary, { force: true }); } catch {}
+    }
+    fail(`no se pudo instalar módulo de gsd-model-pick: ${error.message}`);
+    return false;
+  }
+}
+
 function ensureJevEnv(options) {
   const example = path.join(options.repo, "jev.env.example");
   const target = path.join(options.home, ".config", "opencode", "jev.env");
@@ -430,13 +515,70 @@ function verify(options) {
   return result.status === EXIT_OK;
 }
 
+function pickModels(options) {
+  const script = path.join(options.repo, "tools", "gsd-model-pick.mjs");
+  const overlay = path.join(options.home, ".config", "opencode", "gsd-router", "picks.local");
+  const args = [script, "--home", options.home, "--repo", options.repo];
+
+  if (options.modelsFile) {
+    args.push("--models-file", options.modelsFile);
+    log("models", `aplicando matriz desde ${options.modelsFile}`);
+  } else if (fs.existsSync(overlay) && !options.forcePickModels) {
+    args.push("--apply-overlay");
+    log("models", "validando elecciones locales guardadas para gsd-route");
+  } else if (!options.pickModels || options.yes) {
+    if (fs.existsSync(overlay)) {
+      args.push("--apply-overlay");
+      log("models", "validando elecciones locales guardadas (sin prompt)");
+    } else {
+      log("models", "omitido; se mantienen perfiles del repo");
+      return true;
+    }
+  } else if (!process.stdin.isTTY) {
+    if (options.forcePickModels) {
+      fail("--pick-models requiere TTY; usa --models-file para instalación no interactiva");
+      return false;
+    }
+    log("models", "sin TTY ni overlay; se mantienen perfiles del repo");
+    return true;
+  } else {
+    log("models", "elegí modelos para agentes y perfiles (Enter mantiene valores actuales)");
+  }
+
+  const result = run(process.execPath, args, { cwd: options.repo });
+  if (result.status !== EXIT_OK) {
+    fail(`selector de modelos falló (exit ${result.status ?? "unknown"})`);
+    return false;
+  }
+  return true;
+}
+
 function main() {
   const options = parseArgs(process.argv);
+  if (options.forcePickModels && !options.modelsFile && !process.stdin.isTTY && !options.dryRun) {
+    fail("--pick-models requiere TTY; usa --models-file para instalación no interactiva");
+    process.exit(EXIT_USAGE);
+  }
+  if (options.modelsFile) {
+    try {
+      const defaults = readProfiles(path.join(options.repo, "home", ".config", "opencode", "gsd-router"));
+      mergeOverlay(defaults, readModelFile(options.modelsFile));
+    } catch (error) {
+      fail(`matriz de modelos inválida: ${error.message}`);
+      process.exit(EXIT_USAGE);
+    }
+  }
   const platform = detectPlatform();
   log("detect", `${platform.family} (${platform.arch}) — ${platform.notes}`);
   log("detect", `repo=${options.repo} home=${options.home}`);
 
   if (options.dryRun) log("detect", "modo dry-run: no se escribe nada");
+
+  if (options.dryRun) {
+    log("models", "dry-run: se guardaría overlay local o se conservaría la matriz actual");
+  } else if (!pickModels(options)) {
+    process.exit(EXIT_FAILED);
+  }
 
   if (options.withDeps) {
     if (options.dryRun) log("deps", "dry-run: se instalarían " + JSON.stringify(DEPS));
@@ -463,6 +605,7 @@ function main() {
   }
 
   if (!copyBin(options)) process.exit(EXIT_FAILED);
+  if (!copyModelPickerSupport(options)) process.exit(EXIT_FAILED);
   if (!ensureJevEnv(options)) process.exit(EXIT_FAILED);
 
   if (options.skipPlugins) log("plugins", "omitido (--skip-plugins)");
@@ -475,6 +618,8 @@ function main() {
   } else if (!options.dryRun && !restoreManifest(options)) {
     process.exit(EXIT_FAILED);
   }
+
+  if (!options.dryRun && !rememberRepo(options)) process.exit(EXIT_FAILED);
 
   if (options.skipVerify) {
     log("verify", "omitido");

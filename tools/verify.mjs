@@ -7,7 +7,7 @@
 //   3. cli-tools        gsd-sdk --help and graphify --help respond (--no-cli skips)
 //   4. plugins          plugin files referenced by opencode.json exist
 //   5. discovery        skills/agents are discoverable
-//   6. model-ids        every model id in gsd-router/{easy,medium,hard}.json is listed
+//   6. model-ids        every model id in the effective home profiles is listed
 //                       by `opencode models` (--no-models skips)
 //
 // Exit 0 = all green, 1 = at least one failed check, 2 = usage error.
@@ -17,6 +17,7 @@ import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { PROFILE_NAMES, loadOverlay, mergeOverlay } from "../lib/model-pick.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -319,10 +320,33 @@ function checkDiscovery(home) {
 }
 
 function checkModels(home, repo) {
-  const candidateDirs = [
-    [path.join(home, ".config", "opencode", "gsd-router"), "home"],
-    [path.join(repo, "home", ".config", "opencode", "gsd-router"), "repo"],
-  ];
+  const homeRouterDir = path.join(home, ".config", "opencode", "gsd-router");
+  const repoRouterDir = path.join(repo, "home", ".config", "opencode", "gsd-router");
+  const profileDocs = {};
+  let effective;
+  try {
+    for (const profile of PROFILE_NAMES) {
+      const homeFile = path.join(homeRouterDir, `${profile}.json`);
+      const file = fs.existsSync(homeFile) ? homeFile : path.join(repoRouterDir, `${profile}.json`);
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (
+        parsed.name !== profile ||
+        !parsed.model_overrides ||
+        typeof parsed.model_overrides !== "object" ||
+        Array.isArray(parsed.model_overrides)
+      ) {
+        throw new Error(`${file}: perfil inválido`);
+      }
+      profileDocs[profile] = parsed;
+    }
+    effective = mergeOverlay(profileDocs, loadOverlay(home));
+  } catch (error) {
+    check("model-ids", false, `perfiles/overlay inválidos: ${error.message}`, "revisa gsd-router/*.json y picks.local");
+    return;
+  }
+
+  // Check only effective home models; repository defaults are fallback inputs,
+  // not extra model selections when the user has customized their overlay.
   const available = runToolRetry("opencode", ["models"], 30000, 3);
   if (available.error || available.status !== 0) {
     skip(
@@ -341,17 +365,12 @@ function checkModels(home, repo) {
   const problems = [];
   const unverified = [];
   let checked = 0;
-  for (const [routerDir, label] of candidateDirs) {
-    for (const profile of ["easy", "medium", "hard"]) {
-      const file = path.join(routerDir, `${profile}.json`);
-      if (!fs.existsSync(file)) continue;
-      const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
-      for (const [agent, model] of Object.entries(parsed.model_overrides ?? {})) {
-        checked += 1;
-        if (known.has(model)) continue;
-        if (limited) unverified.push(`${label}/${profile}:${agent}=${model}`);
-        else problems.push(`${label}/${profile}:${agent}=${model}`);
-      }
+  for (const profile of PROFILE_NAMES) {
+    for (const [agent, model] of Object.entries(effective[profile])) {
+      checked += 1;
+      if (known.has(model)) continue;
+      if (limited) unverified.push(`${profile}:${agent}=${model}`);
+      else problems.push(`${profile}:${agent}=${model}`);
     }
   }
 
@@ -360,7 +379,7 @@ function checkModels(home, repo) {
       "model-ids",
       false,
       problems.join("; "),
-      "reemplazá los ids inválidos en gsd-router/*.json (ver `opencode models`)",
+      "corré `gsd-model-pick` para cambiar la celda en `picks.local` (ver `opencode models`)",
     );
     return;
   }

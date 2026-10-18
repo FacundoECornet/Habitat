@@ -43,7 +43,7 @@ powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -WithDeps -WithGsd
 
 #### Instalar en una máquina corporativa (seguro y reversible)
 
-Habitat **no toca la red corporativa, el firewall, el proxy ni ninguna política de sistema**. Todo lo que escribe vive bajo `%USERPROFILE%` (`bin`, `.config\opencode`, `.claude`, `.agents`, `.gsd`, `.opencode`, `.habitat\backups`); el único cambio "de sistema" es agregar `%USERPROFILE%\bin` al **PATH de usuario** (registro HKCU, no HKLM). Los paquetes npm globales (`get-shit-done-cc`, `context-mode`) van al *npm prefix* — per-usuario si Node es per-usuario. La red solo se **lee** (registro npm + `opencode`).
+Habitat **no toca la red corporativa, el firewall, el proxy ni ninguna política de sistema**. Todo lo que escribe vive bajo `%USERPROFILE%` (`bin`, `lib\model-pick.mjs`, `.config\opencode`, `.claude`, `.agents`, `.gsd`, `.opencode`, `.habitat\backups` y `.habitat\repo-root`); el único cambio "de sistema" es agregar `%USERPROFILE%\bin` al **PATH de usuario** (registro HKCU, no HKLM). Los paquetes npm globales (`get-shit-done-cc`, `context-mode`) van al *npm prefix* — per-usuario si Node es per-usuario. La red solo se **lee** (registro npm + `opencode`).
 
 Secuencia recomendada para no arriesgar nada:
 
@@ -69,13 +69,19 @@ Si el *npm prefix* es de sistema y no querés tocar `Program Files`, fijalo a tu
 npm config set prefix "$env:APPDATA\npm"
 ```
 
-Reversión completa (deja la máquina como estaba):
+Reversión segura:
 
 ```powershell
+# desinstalá solo si Habitat agregó estos paquetes (no si ya estaban antes)
 npm uninstall -g get-shit-done-cc context-mode
-Remove-Item "$env:USERPROFILE\bin","$env:USERPROFILE\.config\opencode","$env:USERPROFILE\.claude","$env:USERPROFILE\.agents","$env:USERPROFILE\.gsd","$env:USERPROFILE\.opencode","$env:USERPROFILE\.habitat" -Recurse -Force
-# y quitá %USERPROFILE%\bin del PATH de usuario si lo agregó bootstrap.ps1
+# primero restaura cualquier archivo anterior desde sus *.backup-<timestamp> o ~/.habitat/backups
+# luego, para quitar solo el selector (preserva otros archivos/carpetas del usuario):
+# si restauraste un archivo de esta lista, quita esa ruta del Remove-Item de abajo
+Remove-Item "$env:USERPROFILE\bin\gsd-model-pick.mjs","$env:USERPROFILE\bin\gsd-model-pick.cmd","$env:USERPROFILE\lib\model-pick.mjs","$env:USERPROFILE\.config\opencode\gsd-router\picks.local","$env:USERPROFILE\.habitat\repo-root" -Force -ErrorAction SilentlyContinue
+# quitá %USERPROFILE%\bin del PATH de usuario solo si bootstrap.ps1 lo agregó
 ```
+
+Para revertir toda la instalación, recupera primero archivos respaldados antes de borrar rutas gestionadas; no borres recursivamente `.config\opencode`, `bin` o `.habitat` si ya contenían archivos tuyos.
 
 #### Windows (alternativa: WSL 2 + Ubuntu)
 
@@ -137,12 +143,37 @@ El repo es privado: GitHub debe autenticarte por SSH o HTTPS para que `git clone
 La instalación completa:
 
 1. Detecta SO y arquitectura.
-2. Con `--with-deps`, instala `get-shit-done-cc`, `context-mode` y Graphify (Graphify requiere **Python 3**; sin él se omite con aviso).
-3. Con `--with-gsd`, instala GSD y reaplica los bloques Habitat solo si sus checksums coinciden.
-4. Copia las herramientas ejecutables a `~/bin` (crea backup si ya existen).
-5. Crea `jev.env` desde el ejemplo solo si falta.
-6. Restaura las rutas permitidas por `MANIFEST.json`, ejecuta `npm ci` cuando los lockfiles cambiaron y respalda archivos que va a reemplazar.
-7. Ejecuta `tools/verify.mjs` y reporta resultados.
+2. Antes de instalar, en TTY ofrece elegir modelos para cada agente y perfil (`easy`, `medium`, `hard`); con overlay guardado no vuelve a preguntar.
+3. Con `--with-deps`, instala `get-shit-done-cc`, `context-mode` y Graphify (Graphify requiere **Python 3**; sin él se omite con aviso).
+4. Con `--with-gsd`, instala GSD y reaplica los bloques Habitat solo si sus checksums coinciden.
+5. Copia las herramientas ejecutables a `~/bin` (crea backup si ya existen).
+6. Crea `jev.env` desde el ejemplo solo si falta.
+7. Restaura las rutas permitidas por `MANIFEST.json`, ejecuta `npm ci` cuando los lockfiles cambiaron y respalda archivos que va a reemplazar.
+8. Ejecuta `tools/verify.mjs` y reporta resultados.
+
+### Elegir modelos de perfiles GSD
+
+En una instalación interactiva sin preferencias previas, Habitat recorre perfiles `easy` → `medium` → `hard` y pregunta modelo por agente. El modelo actual aparece como default: **Enter** lo mantiene, `!` vuelve al default del repo, `*` salta lo restante del perfil y `q` salta lo restante de todos los perfiles. Escribí un ID `proveedor/modelo` para cambiarlo. Atajo opcional `@writer=proveedor/modelo` aplica ese modelo a los agentes del grupo visible en el perfil actual; también existen `@planner=`, `@executor=` y `@checker=`. Los grupos ordenan la lista, no asignan modelos automáticamente.
+
+Las selecciones se guardan en `~/.config/opencode/gsd-router/picks.local`, overlay local JSON que no se captura ni se reemplaza con restore. Los perfiles base del repo quedan intactos; `gsd-route` mezcla overlay al aplicar easy/medium/hard. En instalaciones siguientes se conserva sin volver a preguntar; usa `--pick-models` para abrir el selector de nuevo. `--no-pick-models` omite una selección nueva, pero conserva el overlay guardado.
+
+Para instalación no interactiva, `--models-file` aplica archivo JSON sin prompts. Podés exportar la matriz completa, editar las celdas que quieras y aplicarla:
+
+```bash
+node tools/gsd-model-pick.mjs --export-models ./my-models.json
+# editar easy/medium/hard → agente: "proveedor/modelo"
+node tools/install.mjs --models-file ./my-models.json
+```
+
+El CLI también permite editar una celda o un grupo directamente:
+
+```bash
+gsd-model-pick --profile medium --agent gsd-planner --model proveedor/modelo
+gsd-model-pick --profile hard --role writer --model proveedor/modelo
+gsd-model-pick --list
+```
+
+IDs con formato inválido se rechazan al elegirlos; `verify` comprueba IDs disponibles en `opencode models` para los perfiles efectivos del home.
 
 Para restaurar sin instalar dependencias globales ni GSD:
 
@@ -250,7 +281,8 @@ Revisar los cambios, confirmar que no contienen secretos y luego hacer commit/pu
 | `./scripts/capture.sh [--dry-run]` | Sincroniza los paths del manifiesto desde el home al snapshot. El dry-run es read-only. |
 | `./scripts/restore.sh [--dry-run] [--verify]` | Restaura el snapshot al home (shim del motor Node; corre en Windows/WSL/Linux/macOS). |
 | `.\bootstrap.ps1 [-WithDeps] [-WithGsd]` | Arranque en Windows nativo: instalación completa + `PATH` de usuario. |
-| `node tools/install.mjs [opciones]` | Instala herramientas y ejecuta restore + verify. |
+| `node tools/install.mjs [opciones]` | Instala herramientas, restaura, permite elegir modelos en TTY y ejecuta verify. Flags: `--pick-models`, `--no-pick-models`, `--models-file FILE`, `--yes`. |
+| `gsd-model-pick [opciones]` | Edita la matriz de modelos por agente/perfil; admite `--list`, `--export-models FILE` y opciones por celda/grupo. |
 | `node tools/verify.mjs [--json] [--no-models] [--no-cli]` | Verificación funcional, read-only. |
 | `gsd-jevs-route "resumen"` | Clasifica dificultad y aplica perfil solo con decisión automática válida. |
 | `gsd-route <easy\|medium\|hard>` | Aplica perfil manual confirmado. |
@@ -272,6 +304,7 @@ Revisar los cambios, confirmar que no contienen secretos y luego hacer commit/pu
 - **`graphify` no responde o se omitió al instalar:** falta **Python 3**. Instalalo y `pipx install graphifyy` (o `pip install graphifyy==0.9.14`), luego `node tools/install.mjs --with-deps`. El resto del framework funciona igual sin Graphify.
 - **`verify` falla en `model-ids`:** autentica OpenCode (`opencode auth login`) y reintenta. Si solo quieres omitir esa comprobación, usa `--no-models`.
 - **`gsd-jevs-route` devuelve código `2`:** no se aplicó ningún perfil; revisa una key JEV o selecciona perfil manualmente con `JEV_PROFILE_SOURCE=manual gsd-route <easy|medium|hard>`.
+- **Cambiar modelos elegidos:** ejecuta `gsd-model-pick` (o `node tools/gsd-model-pick.mjs` desde el repo); para automatizar, exporta/edita matriz y pasa `--models-file FILE` a `tools/install.mjs`.
 - **Drift repo-vs-máquina:** `capture.sh --dry-run` y `restore.sh --dry-run` muestran diferencias sin escribir. Exit `1` significa que hay acciones pendientes.
 - **Conflictos durante restore:** usa los archivos `.backup-<timestamp>` para recuperar la versión anterior; los archivos huérfanos del destino se preservan.
 - **El comando `gsd-*` no aparece:** confirma que `~/bin` está en `PATH` o invoca el script con `node tools/<nombre>.mjs` desde el repo.
@@ -300,7 +333,7 @@ Desde Linux, WSL o macOS con Bash, Node.js, `rsync` y coreutils:
 for t in manifest-contract exclusion-rules restore restore-live-inputs capture path-leaks pre-commit-secret; do
   bash "tests/$t.sh" || exit 1
 done
-node --test tests/router-flow.mjs tests/install-verify.mjs tests/graphify-sync.mjs tests/restore-node.mjs
+node --test tests/router-flow.mjs tests/install-verify.mjs tests/graphify-sync.mjs tests/restore-node.mjs tests/model-pick.mjs
 ```
 
 Las suites `restore-node`, `router-flow`, `install-verify` y `graphify-sync` son Node.js puro y también corren en Windows nativo (`node --test`); las suites Bash son de desarrollo POSIX.

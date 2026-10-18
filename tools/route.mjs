@@ -10,6 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { applyProfileOverlay } from "../lib/model-pick.mjs";
 
 const EXIT_OK = 0;
 const EXIT_USAGE = 1;
@@ -110,6 +111,24 @@ function main() {
   if (typeof profileFile?.model_overrides !== "object" || profileFile.model_overrides === null) {
     fail(`${profilePath} no declara model_overrides`);
   }
+  let localOverlay = null;
+  const overlayPath = path.join(profileDir, "picks.local");
+  if (fs.existsSync(overlayPath)) {
+    try {
+      localOverlay = JSON.parse(fs.readFileSync(overlayPath, "utf8"));
+    } catch (error) {
+      fail(`${overlayPath} no es JSON válido: ${error.message}`);
+    }
+    if (!localOverlay || typeof localOverlay !== "object" || Array.isArray(localOverlay)) {
+      fail(`${overlayPath} debe contener un objeto JSON de overlay`);
+    }
+  }
+  let effectiveProfile;
+  try {
+    effectiveProfile = applyProfileOverlay(profileFile, profile, localOverlay);
+  } catch (error) {
+    fail(`overlay local de modelos inválido (${overlayPath}): ${error.message}`);
+  }
 
   const declaredBefore =
     typeof config.difficulty_profile === "string" && config.difficulty_profile.length > 0;
@@ -117,7 +136,7 @@ function main() {
 
   const next = {
     ...config,
-    model_overrides: { ...profileFile.model_overrides },
+    model_overrides: { ...effectiveProfile.model_overrides },
     difficulty_profile: profileFile.name ?? profile,
     difficulty_source: process.env.JEV_PROFILE_SOURCE ?? "manual",
   };
@@ -137,7 +156,7 @@ function main() {
           : {};
       writeJsonAtomic(routerPath, {
         ...base,
-        model_overrides: { ...profileFile.model_overrides },
+        model_overrides: { ...effectiveProfile.model_overrides },
       });
     } catch (error) {
       process.stderr.write(`warn: no se pudo sincronizar router global: ${error.message}\n`);
