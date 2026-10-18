@@ -41,6 +41,42 @@ powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -WithDeps -WithGsd
 
 `bootstrap.ps1` verifica Node/npm/Git, ejecuta `tools/install.mjs` (deps, GSD, restore y verify), agrega `%USERPROFILE%\bin` al `PATH` de usuario y recuerda autenticar OpenCode. Los binarios de `bin/` se instalan como `<nombre>.mjs` más un shim `<nombre>.cmd`, ejecutable desde PowerShell y `cmd.exe`. No hace falta tocar `/mnt/c`: clona en el disco de Windows (por ejemplo `C:\code\habitat`).
 
+#### Instalar en una máquina corporativa (seguro y reversible)
+
+Habitat **no toca la red corporativa, el firewall, el proxy ni ninguna política de sistema**. Todo lo que escribe vive bajo `%USERPROFILE%` (`bin`, `.config\opencode`, `.claude`, `.agents`, `.gsd`, `.opencode`, `.habitat\backups`); el único cambio "de sistema" es agregar `%USERPROFILE%\bin` al **PATH de usuario** (registro HKCU, no HKLM). Los paquetes npm globales (`get-shit-done-cc`, `context-mode`) van al *npm prefix* — per-usuario si Node es per-usuario. La red solo se **lee** (registro npm + `opencode`).
+
+Secuencia recomendada para no arriesgar nada:
+
+```powershell
+# 1. Ver el plan sin escribir nada (read-only)
+node tools\install.mjs --dry-run
+
+# 2. Core sin instalaciones globales: valida Git + Node + OpenCode + store/restore
+node tools\install.mjs
+
+# 3. Comprobar (plugins puede fallar solo por context-mode ausente: esperado)
+node tools\verify.mjs
+
+# 4. Cuando quieras, sumar globales per-usuario (GSD, context-mode, Graphify) y auth
+node tools\install.mjs --with-deps --with-gsd
+opencode auth login
+node tools\verify.mjs            # → 6/6
+```
+
+Si el *npm prefix* es de sistema y no querés tocar `Program Files`, fijalo a tu usuario (sin admin):
+
+```powershell
+npm config set prefix "$env:APPDATA\npm"
+```
+
+Reversión completa (deja la máquina como estaba):
+
+```powershell
+npm uninstall -g get-shit-done-cc context-mode
+Remove-Item "$env:USERPROFILE\bin","$env:USERPROFILE\.config\opencode","$env:USERPROFILE\.claude","$env:USERPROFILE\.agents","$env:USERPROFILE\.gsd","$env:USERPROFILE\.opencode","$env:USERPROFILE\.habitat" -Recurse -Force
+# y quitá %USERPROFILE%\bin del PATH de usuario si lo agregó bootstrap.ps1
+```
+
 #### Windows (alternativa: WSL 2 + Ubuntu)
 
 En PowerShell, instala Ubuntu si WSL aún no está configurado y reinicia si Windows lo solicita:
