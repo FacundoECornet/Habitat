@@ -122,15 +122,28 @@ function fail(message) {
 }
 
 function run(command, args, options = {}) {
-  // Windows spawns .cmd/.bat shims (npm, opencode) only through cmd.exe; on
-  // win32 spawnSync without a shell fails (EINVAL/ENOENT), same as restore.mjs.
-  // The command stays bare: quoting it makes cmd.exe mis-parse the args.
+  // Windows: .cmd/.bat shims (npm, opencode) only spawn through cmd.exe, and
+  // an exe path with spaces ("C:\Program Files\nodejs\node.exe") must carry
+  // inline quoting — with args-array + shell, spawnSync concatenates the line
+  // unquoted and cmd.exe splits at the first space ("C:\Program" not found).
+  // Empirical cmd.exe rules: quote only parts containing spaces — quoting a
+  // bare shim name ("npm") makes the command fail with a silent exit 1.
+  if (IS_WIN) {
+    const q = (s) => (/\s/.test(s) ? `"${s}"` : s);
+    const line = [q(command), ...args.map(q)].join(" ");
+    return spawnSync(line, {
+      encoding: "utf8",
+      stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
+      cwd: options.cwd,
+      env: options.env ?? process.env,
+      shell: true,
+    });
+  }
   const result = spawnSync(command, args, {
     encoding: "utf8",
     stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
     cwd: options.cwd,
     env: options.env ?? process.env,
-    shell: IS_WIN,
   });
   return result;
 }
