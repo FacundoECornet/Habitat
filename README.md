@@ -6,15 +6,28 @@ Habitat versiona y restaura un ecosistema de OpenCode —configuración, GSD, ag
 
 ![status](https://img.shields.io/badge/status-operativo-green) ![platforms](https://img.shields.io/badge/instalador-Windows%20%7C%20WSL%20%7C%20Linux%20%7C%20macOS-blue) ![tech](https://img.shields.io/badge/tech-Node.js%20%2B%20Bash-green)
 
-> **Recomendación por sistema:** Windows → WSL 2 + Ubuntu; Linux → terminal Bash; macOS → Bash con Homebrew. El instalador detecta los cuatro entornos. La validación end-to-end registrada se hizo en Linux/WSL; Windows nativo y macOS necesitan las herramientas POSIX detalladas abajo.
+> **Recomendación por sistema:** Windows → PowerShell nativo (7/10/11) o WSL 2 + Ubuntu; Linux → terminal Bash; macOS → Bash con Homebrew. El instalador y el motor de restore son Node.js, así que los cuatro entornos comparten la misma ruta de reconstrucción. La captura (`capture.sh`) sigue siendo una herramienta de desarrollo para máquinas con Bash + rsync.
 
 ## Instalación desde una terminal nueva
 
 ### 1. Preparar el sistema
 
-Se requieren **Git**, **Node.js 22.22.2+ / 24.15+ / 26+ y npm**, **Bash**, **rsync** y **coreutils** (`sha256sum`, `realpath`). Las versiones de Node reflejan el engine del lockfile actual. También necesitas acceso al repo privado y OpenCode instalado en el mismo entorno donde ejecutarás Habitat.
+Se requieren **Git**, **Node.js 22.22.2+ / 24.15+ / 26+ y npm** y **OpenCode** en el mismo entorno donde ejecutarás Habitat. El motor de restore es Node.js puro: Windows nativo no necesita WSL, Bash, `rsync` ni coreutils para instalar y restaurar. La captura del snapshot (`scripts/capture.sh`) es una herramienta de desarrollo y sí requiere **Bash**, **rsync** y **coreutils** (`sha256sum`, `realpath`). Las versiones de Node reflejan el engine del lockfile actual. También necesitas acceso al repo privado.
 
-#### Windows (recomendado: WSL 2 + Ubuntu)
+#### Windows (PowerShell nativo)
+
+En una terminal PowerShell, con Git, Node.js y OpenCode ya instalados:
+
+```powershell
+mkdir $HOME\code -Force
+git clone https://github.com/FacundoECornet/Habitat.git $HOME\code\habitat
+cd $HOME\code\habitat
+powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -WithDeps -WithGsd
+```
+
+`bootstrap.ps1` verifica Node/npm/Git, ejecuta `tools/install.mjs` (deps, GSD, restore y verify), agrega `%USERPROFILE%\bin` al `PATH` de usuario y recuerda autenticar OpenCode. Los binarios de `bin/` se instalan como `<nombre>.mjs` más un shim `<nombre>.cmd`, ejecutable desde PowerShell y `cmd.exe`. No hace falta tocar `/mnt/c`: clona en el disco de Windows (por ejemplo `C:\code\habitat`).
+
+#### Windows (alternativa: WSL 2 + Ubuntu)
 
 En PowerShell, instala Ubuntu si WSL aún no está configurado y reinicia si Windows lo solicita:
 
@@ -31,7 +44,7 @@ sudo apt install -y git bash rsync coreutils
 
 Instala una versión compatible de Node.js (22.22.2+, 24.15+ o 26+) desde [Node.js](https://nodejs.org/en/download) y OpenCode **dentro de Ubuntu/WSL** siguiendo sus instrucciones oficiales: [OpenCode — instalación](https://opencode.ai/docs/). No ejecutes esta instalación desde `/mnt/c`: usa el filesystem Linux (`~/code/habitat`) para evitar problemas de permisos y rendimiento.
 
-> OpenCode y Habitat instalados en Windows y en WSL son entornos distintos. Para el flujo recomendado, autentica OpenCode dentro de WSL. Windows nativo también es detectado por el instalador, pero `restore.sh` requiere Bash y utilidades POSIX disponibles en `PATH`; esa variante aún no cuenta con la validación end-to-end de WSL.
+> OpenCode y Habitat instalados en Windows y en WSL son entornos distintos. WSL es la alternativa cuando querés un toolchain POSIX para desarrollo; para uso diario en Windows, PowerShell nativo (arriba) es el camino soportado y validado de extremo a extremo.
 
 #### Linux (Debian / Ubuntu)
 
@@ -51,11 +64,11 @@ brew install git node rsync coreutils
 export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
 ```
 
-Ese `PATH` hace visibles `sha256sum` y `realpath` de GNU coreutils para las herramientas de restore. Mantén la terminal Bash abierta para la instalación. Instala OpenCode siguiendo [OpenCode — instalación](https://opencode.ai/docs/).
+Ese `PATH` hace visibles `sha256sum` y `realpath` de GNU coreutils para la herramienta de captura (`capture.sh`). Mantén la terminal Bash abierta para la instalación. Instala OpenCode siguiendo [OpenCode — instalación](https://opencode.ai/docs/).
 
 ### 2. Clonar, autenticar e instalar
 
-En WSL, Linux o macOS, desde una terminal Bash:
+En Windows nativo usa `.\bootstrap.ps1` (ver arriba). En WSL, Linux o macOS, desde una terminal Bash:
 
 ```bash
 mkdir -p ~/code
@@ -136,9 +149,9 @@ flowchart LR
 | Tecnología | Uso |
 |---|---|
 | Git | Versionado del snapshot y distribución desde el repo privado. |
-| Bash | Captura, restore, validación del manifiesto y controles de seguridad. |
-| Node.js / npm | Instalador multiplataforma, router JEV, herramientas GSD/Graphify, verificación y reconstrucción de dependencias desde lockfiles. |
-| rsync + coreutils | Copias selectivas, comparación por checksum y utilidades del restore. |
+| Bash | Captura, validación del manifiesto y controles de seguridad (desarrollo). |
+| Node.js / npm | Instalador multiplataforma, motor de restore (`tools/restore.mjs`), router JEV, herramientas GSD/Graphify, verificación y reconstrucción de dependencias desde lockfiles. |
+| rsync + coreutils | Copias selectivas, comparación por checksum y utilidades de la captura (`capture.sh`, solo desarrollo). |
 | GSD (get-shit-done-cc) | Flujos de trabajo de proyecto, planificación y ejecución por fases. |
 | JEV | Clasificación de dificultad y selección controlada de perfiles Easy/Medium/Hard. |
 | Graphify | Grafo local del proyecto, refrescado y verificado al cerrar una fase GSD. |
@@ -185,7 +198,8 @@ Revisar los cambios, confirmar que no contienen secretos y luego hacer commit/pu
 | Comando | Función |
 |---|---|
 | `./scripts/capture.sh [--dry-run]` | Sincroniza los paths del manifiesto desde el home al snapshot. El dry-run es read-only. |
-| `./scripts/restore.sh [--dry-run] [--verify]` | Restaura el snapshot al home; respalda conflictos y conserva archivos locales/huérfanos. |
+| `./scripts/restore.sh [--dry-run] [--verify]` | Restaura el snapshot al home (shim del motor Node; corre en Windows/WSL/Linux/macOS). |
+| `.\bootstrap.ps1 [-WithDeps] [-WithGsd]` | Arranque en Windows nativo: instalación completa + `PATH` de usuario. |
 | `node tools/install.mjs [opciones]` | Instala herramientas y ejecuta restore + verify. |
 | `node tools/verify.mjs [--json] [--no-models] [--no-cli]` | Verificación funcional, read-only. |
 | `gsd-jevs-route "resumen"` | Clasifica dificultad y aplica perfil solo con decisión automática válida. |
@@ -203,7 +217,7 @@ Revisar los cambios, confirmar que no contienen secretos y luego hacer commit/pu
 
 ## Troubleshooting
 
-- **`restore: rsync required` / `sha256sum required`:** instala `rsync` y coreutils en el mismo entorno/shell que ejecuta Habitat. En macOS agrega el directorio `gnubin` al `PATH` como se muestra arriba.
+- **`restore: rsync required` / `sha256sum required` (solo en la captura):** son dependencias de `capture.sh`, no del restore. El motor de restore es Node.js puro; para capturar instala `rsync` + coreutils (en macOS agrega `gnubin` al `PATH` como se muestra arriba).
 - **Node anterior a 22.22.2 / 24.15 / 26 o `npm` ausente:** actualiza Node.js y vuelve a ejecutar la instalación.
 - **`verify` falla en `model-ids`:** autentica OpenCode (`opencode auth login`) y reintenta. Si solo quieres omitir esa comprobación, usa `--no-models`.
 - **`gsd-jevs-route` devuelve código `2`:** no se aplicó ningún perfil; revisa una key JEV o selecciona perfil manualmente con `JEV_PROFILE_SOURCE=manual gsd-route <easy|medium|hard>`.
@@ -216,10 +230,11 @@ Revisar los cambios, confirmar que no contienen secretos y luego hacer commit/pu
 ```text
 Habitat/
 ├── README.md                 # instalación, arquitectura y flujos
+├── bootstrap.ps1             # arranque en Windows nativo (PowerShell)
 ├── MANIFEST.json             # declaración de los paths gestionados
 ├── home/                     # espejo allowlisted del home
-├── scripts/                  # captura, restore y validación
-├── tools/                    # instalador, router JEV, Graphify y verify (Node.js)
+├── scripts/                  # captura, restore (shim) y validación
+├── tools/                    # instalador, motor de restore, router JEV, Graphify y verify (Node.js)
 ├── lib/                      # lector de manifiesto y scanner de secretos
 ├── tests/                    # suites Bash y Node.js
 ├── docs/OVERVIEW.md          # diagramas de arquitectura
@@ -234,5 +249,7 @@ Desde Linux, WSL o macOS con Bash, Node.js, `rsync` y coreutils:
 for t in manifest-contract exclusion-rules restore restore-live-inputs capture path-leaks pre-commit-secret; do
   bash "tests/$t.sh" || exit 1
 done
-node --test tests/router-flow.mjs tests/install-verify.mjs tests/graphify-sync.mjs
+node --test tests/router-flow.mjs tests/install-verify.mjs tests/graphify-sync.mjs tests/restore-node.mjs
 ```
+
+Las suites `restore-node`, `router-flow`, `install-verify` y `graphify-sync` son Node.js puro y también corren en Windows nativo (`node --test`); las suites Bash son de desarrollo POSIX.
