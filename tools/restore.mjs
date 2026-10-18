@@ -658,7 +658,13 @@ function npmGate(destDir, dest) {
     recordFailure("restore: npm-inputs-missing (" + dest + ") — package.json and package-lock.json are required (D-09)");
     return;
   }
-  const r = spawnSync(npm, ["ci"], { cwd: destDir, stdio: "inherit", env: process.env, shell: process.platform === "win32" });
+  // win32: whichBin resolves a full shim path (often "C:\Program Files\...\npm")
+  // with spaces; with an args array + shell, spawnSync concatenates unquoted and
+  // cmd.exe splits at the first space ("C:\Program" not found). Quote the spaces.
+  const win = process.platform === "win32";
+  const r = win
+    ? spawnSync(`"${npm}" ci`, { cwd: destDir, stdio: "inherit", env: process.env, shell: true })
+    : spawnSync(npm, ["ci"], { cwd: destDir, stdio: "inherit", env: process.env, shell: false });
   if (r.status === 0) {
     try { fs.mkdirSync(nm, { recursive: true }); } catch { /* ignore */ }
     try { fs.writeFileSync(marker, npmDigest(pkg, lock)); } catch { /* ignore */ }
