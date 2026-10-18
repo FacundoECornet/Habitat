@@ -122,11 +122,14 @@ function fail(message) {
 }
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  // Windows spawns .cmd/.bat shims (npm, opencode) only through cmd.exe; on
+  // win32 spawnSync without a shell fails with ENOENT (same as restore.mjs).
+  const result = spawnSync(IS_WIN ? `"${command}"` : command, args, {
     encoding: "utf8",
     stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
     cwd: options.cwd,
     env: options.env ?? process.env,
+    shell: IS_WIN,
   });
   return result;
 }
