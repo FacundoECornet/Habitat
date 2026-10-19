@@ -421,6 +421,27 @@ function checkDiscovery(home) {
   );
 }
 
+function checkArchify(home) {
+  const cli = path.join(home, ".agents", "skills", "archify", "bin", "archify.mjs");
+  if (!fs.existsSync(cli)) {
+    check("archify", false, "falta CLI empaquetado del skill Archify", "reinstalá Habitat para restaurar la skill completa");
+    return;
+  }
+  const result = spawnSync(process.execPath, [cli, "doctor"], {
+    encoding: "utf8",
+    timeout: 30000,
+    windowsHide: true,
+  });
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+  const ok = result.status === 0 && /Archify is ready\./.test(output);
+  check(
+    "archify",
+    ok,
+    ok ? "CLI listo; doctor OK" : `doctor falló (exit ${result.status ?? "unknown"})`,
+    "reinstalá Habitat o revisá el payload de .agents/skills/archify",
+  );
+}
+
 function checkModels(home, repo) {
   const homeRouterDir = path.join(home, ".config", "opencode", "gsd-router");
   const repoRouterDir = path.join(repo, "home", ".config", "opencode", "gsd-router");
@@ -506,6 +527,7 @@ function main() {
   if (!options.noCli) checkCli();
   checkPlugins(options.home);
   checkDiscovery(options.home);
+  checkArchify(options.home);
   if (!options.noModels) checkModels(options.home, options.repo);
 
   const failed = results.filter((r) => !r.ok);

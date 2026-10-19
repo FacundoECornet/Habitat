@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generated": "2026-10-19T15:48:33Z",
+  "generated": "2026-10-19T18:14:05Z",
   "entries": [
     {
       "origin": ".config/opencode",
@@ -67,7 +67,6 @@
       "mode": "copy",
       "excludes": [
         "node_modules/",
-        "bin/",
         "*.tar.gz",
         "*.tgz",
         "*.tar",

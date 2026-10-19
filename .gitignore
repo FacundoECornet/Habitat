@@ -25,6 +25,8 @@
 # --- generated / reinstallable (rebuilt by `npm ci`) ---
 **/node_modules/
 **/bin/
+!home/.agents/skills/archify/bin/
+!home/.agents/skills/archify/bin/**
 dist/
 build/
 

@@ -85,7 +85,7 @@ if (doc.entries.length !== ALLOWLIST.size) {
 
 // Every entry must declare the full structural denylist (D-07/D-08/D-10).
 const REQUIRED_EXCLUDES = [
-  'node_modules/', 'bin/', '*.tar.gz', '*.tgz', '*.tar', '*.zip', '*.bak*',
+  'node_modules/', '*.tar.gz', '*.tgz', '*.tar', '*.zip', '*.bak*',
   '*.backup-*',
   'opencode-backup/', 'opencode-backup-*.tar.gz', 'agents.bak-*',
   'jev.env', '.git-credentials', '.claude.json', '.git/', '*.local',
@@ -94,7 +94,9 @@ const REQUIRED_EXCLUDES = [
 
 // Per-origin extras (Phase 3 Option-A runtime exclusions, decisions 03-03).
 const REQUIRED_EXCLUDES_BY_ORIGIN = new Map([
-  ['.config/opencode', ['sessions/', 'gsd-router.backup/', 'backup-*', 'gsd-install-state.json']]
+  ['.config/opencode', ['bin/', 'sessions/', 'gsd-router.backup/', 'backup-*', 'gsd-install-state.json']],
+  ['.claude/skills', ['bin/']],
+  ['.gsd', ['bin/']]
 ]);
 
 const ENTRY_KEYS = ['origin', 'dest', 'mode', 'excludes', 'post_steps'];
