@@ -11,7 +11,7 @@
       "url": "https://github.com/FacundoECornet/Habitat.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "3cebbfba4a1cb67c7e84c9a31395968ac04c576e"
+      "revision": "7f800d029a3fbcaaddbf5465ea96599cb80209e6"
     },
     "translations": {
       "diagram.description.workflow": "Flujo de selección de perfiles de modelos para GSD con JEV.",
@@ -74,7 +74,7 @@
       "sublabel": "dificultad del alcance",
       "width": 136,
       "sources": [
-        { "path": "tools/gsd-jevs-route.mjs", "line": 314, "end_line": 320 },
+        { "path": "tools/gsd-jevs-route.mjs", "line": 327, "end_line": 343 },
         { "path": "home/.config/opencode/gsd-router/jev-catalog.json", "line": 5, "end_line": 23 }
       ]
     },
@@ -87,8 +87,7 @@
       "sublabel": "auto · ≥ 0.85 / 0.50",
       "width": 144,
       "sources": [
-        { "path": "tools/gsd-jevs-route.mjs", "line": 303, "end_line": 320 },
-        { "path": "tools/gsd-jevs-route.mjs", "line": 338, "end_line": 360 }
+        { "path": "tools/gsd-jevs-route.mjs", "line": 348, "end_line": 380 }
       ]
     },
     {
@@ -115,7 +114,7 @@
       "width": 120,
       "sources": [
         { "path": "home/.config/opencode/get-shit-done/workflows/new-project.md", "line": 788, "end_line": 794 },
-        { "path": "tools/gsd-jevs-route.mjs", "line": 338, "end_line": 360 }
+        { "path": "tools/gsd-jevs-route.mjs", "line": 354, "end_line": 367 }
       ]
     },
     {
