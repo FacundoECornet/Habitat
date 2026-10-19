@@ -121,6 +121,7 @@ Habitat incluye el plugin y los comandos de Caveman para controlar cuánto se co
 - **JEV falla o MCP muestra timeout:** confirma `OpenCode Zen` con `opencode.cmd auth list` (Windows) o `opencode auth list` (Linux/macOS); vuelve a conectar con `opencode.cmd auth login` / `opencode auth login` y reinicia OpenCode. Diagnóstico MCP: `opencode.cmd --print-logs --log-level DEBUG mcp list` (Windows) o `opencode --print-logs --log-level DEBUG mcp list`.
 - **JEV no aplica perfil:** usa `gsd-route easy|medium|hard` para seleccionar perfil manualmente.
 - **`graphify` no está disponible:** instala Python 3 y vuelve a ejecutar `node tools/install.mjs --with-deps`.
+- **`npm ci` falla con `UNABLE_TO_VERIFY_LEAF_SIGNATURE`:** tu red intercepta TLS. Habitat reintenta con el almacén de CA del sistema; si tampoco funciona, instalá la CA corporativa en el sistema (`sudo update-ca-certificates` en Linux/WSL) o exportá `NODE_EXTRA_CA_CERTS=/ruta/a/ca.crt` y repetí la instalación.
 
 ## Requisitos por tarea
 

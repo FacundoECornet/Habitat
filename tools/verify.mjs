@@ -107,12 +107,15 @@ function checkManifest(repo, home) {
   );
 }
 
-// Restored payload must carry no unexpanded placeholder and no maintainer-bound
+// Restored payload must carry no unexpanded placeholder and no foreign
 // absolute home path: either would resolve to a missing file on this machine.
+// The current machine's own home (already expanded) is legitimate.
 function checkPortablePaths(home) {
   const root = path.join(home, ".config", "opencode");
   if (!fs.existsSync(root)) return;
   const forbidden = ["__HABITAT_HOME__"];
+  const ownHome = path.resolve(home).replace(/\\/g, "/").toLowerCase();
+  const foreignHome = /\/home\/[A-Za-z_][^/\s"'`)]*/g;
   const hits = [];
   const stack = [root];
   while (stack.length && hits.length < 20) {
@@ -127,8 +130,9 @@ function checkPortablePaths(home) {
       for (const token of forbidden) {
         if (text.includes(token)) hits.push(`${path.relative(home, abs)} (${token})`);
       }
-      if (/\/home\/[A-Za-z_][^/\s]*/.test(text)) {
-        hits.push(`${path.relative(home, abs)} (/home/<login>)`);
+      for (const match of text.match(foreignHome) ?? []) {
+        if (match.toLowerCase() === ownHome) continue;
+        hits.push(`${path.relative(home, abs)} (${match})`);
       }
     }
   }

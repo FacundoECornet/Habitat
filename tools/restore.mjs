@@ -683,7 +683,9 @@ function npmGate(destDir, dest) {
   };
 
   let attempt = runCi(process.env);
+  let certificateFailure = false;
   if (attempt.status !== 0 && isCertificateError(attempt.output)) {
+    certificateFailure = true;
     // Corporate TLS interception: retry once against the system CA store.
     const retryEnv = withSystemCaAnyPlatform(process.env);
     if (retryEnv !== process.env) {
@@ -696,6 +698,11 @@ function npmGate(destDir, dest) {
     try { fs.writeFileSync(marker, npmDigest(pkg, lock)); } catch { /* ignore */ }
     out("npm ci: installed (" + dest + ")");
     logLine("npm-ci installed " + dest);
+  } else if (certificateFailure) {
+    recordFailure(
+      "restore: npm-failed (" + dest + ") — la red intercepta TLS y el almacén de CA del sistema no incluye la CA corporativa; " +
+        "instalá la CA corporativa en el sistema o exportá NODE_EXTRA_CA_CERTS=/ruta/ca.crt y repetí (D-10)",
+    );
   } else {
     recordFailure("restore: npm-failed (" + dest + ") — retry npm ci by hand (D-10)");
   }
