@@ -8,6 +8,7 @@
   // el prefijo "./" (nunca una ruta absoluta de la PC de origen).
   "plugin": [
     "./plugins/caveman/plugin.js",
+    "./plugins/graphify.js",
     "context-mode"
   ],
 

@@ -107,6 +107,39 @@ function checkManifest(repo, home) {
   );
 }
 
+// Restored payload must carry no unexpanded placeholder and no maintainer-bound
+// absolute home path: either would resolve to a missing file on this machine.
+function checkPortablePaths(home) {
+  const root = path.join(home, ".config", "opencode");
+  if (!fs.existsSync(root)) return;
+  const forbidden = ["__HABITAT_HOME__"];
+  const hits = [];
+  const stack = [root];
+  while (stack.length && hits.length < 20) {
+    const dir = stack.pop();
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === "node_modules") continue;
+      const abs = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) { stack.push(abs); continue; }
+      if (!entry.isFile() || !/\.(md|mdx|js|cjs|mjs|json|jsonc|sh|txt|tsv|yml|yaml)$/i.test(entry.name)) continue;
+      const text = fs.readFileSync(abs, "utf8");
+      for (const token of forbidden) {
+        if (text.includes(token)) hits.push(`${path.relative(home, abs)} (${token})`);
+      }
+      if (/\/home\/[A-Za-z_][^/\s]*/.test(text)) {
+        hits.push(`${path.relative(home, abs)} (/home/<login>)`);
+      }
+    }
+  }
+  check(
+    "portable-paths",
+    hits.length === 0,
+    hits.length === 0 ? "sin placeholders ni rutas /home/<usuario> ajenas" : `rutas sin expandir: ${hits.slice(0, 5).join(", ")}`,
+    "ejecutá tools/restore.mjs para reexpandir el payload al home actual",
+  );
+}
+
 function checkMcp(home, repo) {
   const candidates = [
     path.join(home, ".config", "opencode", "opencode.json"),
@@ -467,6 +500,7 @@ function main() {
   const options = parseArgs(process.argv);
 
   checkManifest(options.repo, options.home);
+  checkPortablePaths(options.home);
   checkMcp(options.home, options.repo);
   checkJevMcp(options.home);
   if (!options.noCli) checkCli();

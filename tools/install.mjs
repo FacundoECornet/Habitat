@@ -23,6 +23,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { planBin, cmdShim } from "../lib/bins.mjs";
 import { mergeOverlay, readModelFile, readProfiles, repoPointerPath } from "../lib/model-pick.mjs";
+import { canonicalHome, expandHome } from "../lib/home-placeholder.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -455,7 +456,9 @@ function patchedGsdStep(options) {
       warn(`parche diferido — ${relative}: sin anclas (el instalador GSD reescribió el archivo; restore lo reconcilia desde el payload)`);
       continue;
     }
-    const checksumOf = (body) => `sha256=${sha256(body)}`;
+    // Checksums cover the canonical (placeholder) form so repo and destination
+    // blocks verify equal regardless of the machine's home directory.
+    const checksumOf = (body) => `sha256=${sha256(canonicalHome(body, options.home))}`;
     for (const repoAnchor of repoAnchors) {
       const destAnchor = destAnchors.find((entry) => entry.name === repoAnchor.name);
       if (!destAnchor) {
@@ -475,7 +478,7 @@ function patchedGsdStep(options) {
         continue;
       }
       const current = fs.readFileSync(destPath, "utf8");
-      const next = replaceAnchors(current, [repoAnchor]);
+      const next = replaceAnchors(current, [{ ...repoAnchor, body: expandHome(repoAnchor.body, options.home) }]);
       if (next !== current) {
         backupFile(destPath, options.home);
         fs.writeFileSync(destPath, next, "utf8");

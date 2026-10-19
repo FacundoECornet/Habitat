@@ -456,7 +456,7 @@ The profiler agent must never select quotes containing any of the following patt
 - `secret` (secrets)
 - `token` (when used as a credential value, not a concept discussion)
 - `api_key` or `API_KEY` (API key references)
-- Full absolute file paths containing usernames (e.g., `/Users/john/...`, `/home/john/...`)
+- Full absolute file paths containing usernames (e.g., `/Users/<username>/...`, `/home/<username>/...`)
 
 **When sensitive content is found and excluded**, report as metadata in the analysis output:
 

@@ -114,7 +114,7 @@ After selecting all evidence quotes, perform a final pass checking for sensitive
 - `secret` (secret values)
 - `token` (when used as a credential value, not a concept)
 - `api_key` or `API_KEY`
-- Full absolute file paths containing usernames (e.g., `/Users/john/`, `/home/john/`)
+- Full absolute file paths containing usernames (e.g., `/Users/<username>/`, `/home/<username>/`)
 
 If any selected quote contains these patterns:
 1. Replace it with the next best quote that does not contain sensitive content

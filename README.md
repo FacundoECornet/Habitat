@@ -110,6 +110,10 @@ Abre o descarga el [diagrama interactivo de Archify](.archify/workflow-gsd-jev-p
 
 Graphify es opcional y requiere Python 3. Sin Python, el resto de Habitat sigue funcionando.
 
+### Caveman
+
+Habitat incluye el plugin y los comandos de Caveman para controlar cuánto se comprime el estilo de respuesta. Usa `/caveman lite|full|ultra|wenyan` para cambiar el nivel; `stop caveman` o `normal mode` vuelve al estilo normal. También puedes usar `/caveman-help` para ver la ayuda.
+
 ## Ayuda rápida
 
 - **Falta acceso al clonar:** inicia sesión en GitHub con una cuenta autorizada para el repositorio.

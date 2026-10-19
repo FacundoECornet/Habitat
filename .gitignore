@@ -59,6 +59,7 @@ home/.azure
 **/*.db
 **/*.db-wal
 **/*.db-shm
+**/gsd-install-state.json
 **/gsd-router.backup/
 **/gsd-router/backup-*
 
@@ -66,7 +67,6 @@ home/.azure
 /.planning/
 /INVENTORY.md
 /docs/OVERVIEW.md
-/tests/
 
 # --- GSD ephemeral ---
 .planning/.gsd-state-tmp/

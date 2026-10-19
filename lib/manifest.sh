@@ -4,7 +4,7 @@
 # Purpose:
 #   The single parser that owns MANIFEST reading for every habitat script
 #   (capture now; restore and verify later). It never `eval`s, never grep-parses
-#   JSON, and never repeats the eight-root list — MANIFEST.json stays the sole
+#   JSON, and never repeats the six-root list — MANIFEST.json stays the sole
 #   source of truth, and `scripts/validate-manifest.sh` remains the strict
 #   contract gate that must run first.
 #

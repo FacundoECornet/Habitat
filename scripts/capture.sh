@@ -23,7 +23,7 @@
 #   D-09 payload only — never stage/commit/push       D-10 shared manifest parser
 #
 # Fail-closed policy:
-#   Only a fully validated manifest and eight readable origins reach rsync.
+#   Only a fully validated manifest and every readable origin reach rsync.
 #   Every refusal prints a named `capture: <code> (...)` diagnostic to stderr
 #   and exits nonzero BEFORE any payload mutation or deletion.
 #

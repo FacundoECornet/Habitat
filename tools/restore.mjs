@@ -24,6 +24,7 @@ import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadValidatedManifest, ManifestError } from "../lib/manifest.mjs";
+import { materialize } from "../lib/home-placeholder.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
@@ -246,14 +247,23 @@ function logLine(s) {
 }
 
 // --- equality: full content checksum + executable bit only (D-02/D-07) ------
-function sha256File(p) {
-  return crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex");
-}
+// The payload stores __HABITAT_HOME__ tokens; the destination holds the
+// expanded text, so the source side is hashed after expansion (same bytes that
+// would be written). A placeholder-free file is hashed as-is.
+function sha256Bytes(buf) { return crypto.createHash("sha256").update(buf).digest("hex"); }
+function sha256File(p) { return sha256Bytes(fs.readFileSync(p)); }
+function materializedSha(p) { return sha256Bytes(materialize(fs.readFileSync(p), HOME)); }
 function isExec(p) { try { return (fs.statSync(p).mode & 0o111) !== 0; } catch { return false; } }
 function fileEqual(a, b) {
   let ha, hb;
-  try { ha = sha256File(a); hb = sha256File(b); } catch { return false; }
+  try { ha = materializedSha(a); hb = sha256File(b); } catch { return false; }
   return ha === hb && isExec(a) === isExec(b);
+}
+// Write the expanded bytes of a payload file, keeping the source permission bits
+// (the exec bit is then reconciled by the caller).
+function writeMaterialized(src, dst) {
+  fs.writeFileSync(dst, materialize(fs.readFileSync(src), HOME));
+  try { fs.chmodSync(dst, fs.statSync(src).mode & 0o777); } catch { /* best-effort */ }
 }
 
 // --- rsync-parity glob-style exclusion matcher (WR-04/WR-05) ----------------
@@ -521,7 +531,7 @@ function entryDirReal(src, dstDir, patterns) {
     const dfile = path.join(dstDir, rel);
     if (!exists(dfile)) {
       try {
-        fs.copyFileSync(item.abs, dfile);
+        writeMaterialized(item.abs, dfile);
       } catch {
         recordFailure("restore: copy-failed (" + dfile + ")");
         return false;
@@ -572,7 +582,7 @@ function entryFileReal(src, dst) {
   // so its other permission bits survive (D-15/CR-03).
   if (!exists(dst)) {
     try {
-      fs.copyFileSync(src, dst);
+      writeMaterialized(src, dst);
     } catch {
       recordFailure("restore: copy-failed (" + dst + ")");
       return false;

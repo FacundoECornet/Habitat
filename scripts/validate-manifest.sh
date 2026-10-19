@@ -6,7 +6,7 @@
 #
 # Fail-closed: exits nonzero with a named diagnostic (`INVALID: <code>`) on any
 # contract violation. Accepts only a syntactically valid JSON manifest whose
-# entries match the exact eight-entry D-06 allowlist with copy-only mode.
+# entries match the exact six-entry D-06 allowlist with copy-only mode.
 #
 # Zero dependencies beyond Bash and Node.js built-ins (no jq, no packages).
 
@@ -70,21 +70,18 @@ if (typeof doc.generated !== 'string' || !rfc3339.test(doc.generated)) {
 }
 
 if (!Array.isArray(doc.entries)) invalid('manifest-entries-type', 'entries must be an array');
-if (doc.entries.length !== 8) {
-  invalid('manifest-entry-count', 'entries must contain exactly 8 roots (got ' + doc.entries.length + ')');
-}
-
 // D-06 allowlist: exact origin -> dest mapping.
 const ALLOWLIST = new Map([
   ['.config/opencode', 'home/.config/opencode'],
   ['.claude/skills', 'home/.claude/skills'],
   ['.agents/skills', 'home/.agents/skills'],
   ['.gsd', 'home/.gsd'],
-  ['.opencode', 'home/.opencode'],
   ['AGENTS.md', 'home/AGENTS.md'],
-  ['.bashrc', 'home/.bashrc'],
-  ['.gitconfig', 'home/.gitconfig']
+  ['.bashrc', 'home/.bashrc']
 ]);
+if (doc.entries.length !== ALLOWLIST.size) {
+  invalid('manifest-entry-count', 'entries must contain exactly ' + ALLOWLIST.size + ' roots (got ' + doc.entries.length + ')');
+}
 
 // Every entry must declare the full structural denylist (D-07/D-08/D-10).
 const REQUIRED_EXCLUDES = [
@@ -97,7 +94,7 @@ const REQUIRED_EXCLUDES = [
 
 // Per-origin extras (Phase 3 Option-A runtime exclusions, decisions 03-03).
 const REQUIRED_EXCLUDES_BY_ORIGIN = new Map([
-  ['.config/opencode', ['sessions/', 'gsd-router.backup/', 'backup-*']]
+  ['.config/opencode', ['sessions/', 'gsd-router.backup/', 'backup-*', 'gsd-install-state.json']]
 ]);
 
 const ENTRY_KEYS = ['origin', 'dest', 'mode', 'excludes', 'post_steps'];
