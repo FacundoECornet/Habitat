@@ -166,8 +166,63 @@ function run(command, args, options = {}) {
   return result;
 }
 
-function stamp() {
-  const now = new Date();
+// Long captured commands (npm installs) print nothing while they run; this
+// keeps the terminal visibly alive so nobody thinks it froze and hits keys.
+function spinner(label) {
+  if (!process.stdout.isTTY) {
+    process.stdout.write(`[run] ${label}...\n`);
+    return { stop: (ok = true) => process.stdout.write(`[run] ${label}: ${ok ? "ok" : "falló"}\n`) };
+  }
+  const frames = ["|", "/", "-", "\\"];
+  const startedAt = Date.now();
+  let frame = 0;
+  const timer = setInterval(() => {
+    const secs = Math.round((Date.now() - startedAt) / 1000);
+    process.stdout.write(`\r${frames[frame++ % frames.length]} ${label} (${secs}s)   `);
+  }, 100);
+  return {
+    stop(ok = true) {
+      clearInterval(timer);
+      const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+      process.stdout.write(`\r${ok ? "ok  " : "FALLO"} ${label} (${secs}s)\n`);
+    },
+  };
+}
+
+function successBanner(options) {
+  process.stdout.write(
+    [
+      "",
+      "============================================================",
+      "  HABITAT INSTALADO",
+      "============================================================",
+      `  Config restaurada en:  ${options.home}`,
+      "  Autenticá OpenCode:    opencode auth login",
+      "                         (Windows con ExecutionPolicy: opencode.cmd auth login)",
+      "  Reabrí la terminal para que tome el PATH (~/bin).",
+      "  Verificá cuando quieras:  node tools/verify.mjs",
+      "============================================================",
+      "",
+    ].join("\n") + "\n",
+  );
+}
+
+function failureBanner() {
+  process.stdout.write(
+    [
+      "",
+      "============================================================",
+      "  LA INSTALACIÓN NO TERMINÓ BIEN",
+      "============================================================",
+      "  Revisá los mensajes de arriba y corré:  node tools/verify.mjs",
+      "  Si es una red corporativa, avisá el error exacto para ajustar el instalador.",
+      "============================================================",
+      "",
+    ].join("\n") + "\n",
+  );
+}
+
+function stamp() {  const now = new Date();
   const pad = (value) => String(value).padStart(2, "0");
   return (
     `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
@@ -257,7 +312,9 @@ function installDeps(options) {
   log("deps", "instalando dependencias globales declaradas");
   const commands = [["npm", ["install", "-g", DEPS.gsd]]];
   for (const [command, args] of commands) {
+    const spin = spinner(`${command} ${args.join(" ")}`);
     const result = run(command, args, { capture: true });
+    spin.stop(result.status === 0);
     if (result.status !== 0) {
       fail(`${command} ${args.join(" ")} falló${errorDetail(result)}`);
       return false;
@@ -271,6 +328,7 @@ function installDeps(options) {
     log("deps", "graphifyy omitido: Windows sin Python — graphify es opcional (D3)");
     return true;
   }
+  const spin = spinner(`graphifyy ${DEPS.graphify}`);
   const graphify = run("uv", ["tool", "install", DEPS.graphify], { capture: true });
   if (graphify.status !== 0) {
     const pipx = run("pipx", ["install", DEPS.graphify], { capture: true });
@@ -279,11 +337,13 @@ function installDeps(options) {
         capture: true,
       });
       if (pip.status !== 0) {
+        spin.stop(false);
         fail(`graphifyy no se pudo instalar (uv/pipx/pip fallaron)${errorDetail(pip)}`);
         return false;
       }
     }
   }
+  spin.stop(true);
   return true;
 }
 
@@ -317,7 +377,9 @@ function ensurePlugins(options) {
     return true;
   }
   log("plugins", `instalando ${DEPS.contextMode}`);
+  const spin = spinner(`npm install -g ${DEPS.contextMode}`);
   const result = run("npm", ["install", "-g", DEPS.contextMode], { capture: true });
+  spin.stop(result.status === 0);
   if (result.status !== 0) {
     fail(`${DEPS.contextMode} no se pudo instalar (npm falló)${errorDetail(result)}; verify lo reportará`);
     return false;
@@ -616,6 +678,10 @@ function main() {
     process.exit(EXIT_FAILED);
   }
 
+  if (!options.dryRun) {
+    log("run", "instalando Habitat — no aprietes teclas, esto puede tardar unos minutos");
+  }
+
   if (options.withDeps) {
     if (options.dryRun) log("deps", "dry-run: se instalarían " + JSON.stringify(DEPS));
     else if (!installDeps(options)) process.exit(EXIT_FAILED);
@@ -627,6 +693,7 @@ function main() {
     if (options.dryRun) {
       log("gsd", "dry-run: se correría el instalador GSD y se re-aplicarían los parches");
     } else {
+      log("gsd", "ejecutando instalador GSD (puede tardar)");
       const install = run("npx", ["-y", "get-shit-done-cc@1.42.3", "--opencode", "--global"], {
         cwd: options.repo,
       });
@@ -659,13 +726,20 @@ function main() {
 
   if (options.skipVerify) {
     log("verify", "omitido");
+    if (!options.dryRun) successBanner(options);
     process.exit(EXIT_OK);
   }
   if (options.dryRun) {
     log("verify", "dry-run: se ejecutaría tools/verify.mjs");
     process.exit(EXIT_OK);
   }
-  process.exit(verify(options) ? EXIT_OK : EXIT_FAILED);
+  const ok = verify(options);
+  if (ok) {
+    successBanner(options);
+    process.exit(EXIT_OK);
+  }
+  failureBanner();
+  process.exit(EXIT_FAILED);
 }
 
 main();

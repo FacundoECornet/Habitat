@@ -74,5 +74,3 @@ if (($userPath -split ';') -notcontains $binDir) {
   $env:Path = "$env:Path;$binDir"
   Write-Host "bootstrap: $binDir agregado al PATH de usuario; reabri la terminal para que tome efecto."
 }
-
-Write-Host "bootstrap: listo. Autentica OpenCode (opencode auth login) y corre: node tools/verify.mjs"
