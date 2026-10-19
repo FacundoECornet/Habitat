@@ -59,8 +59,6 @@ SIG_GHO="${F_GH}o${F_UND}"
 # class, so the allowlist string must not track the live (broadened) detector.
 SIG_GH_DOC="${F_GH}${F_OP}${F_UND}"
 CANON_D09="- **D-09:** Pre-commit hook is bash grep fail-closed (zero deps); patterns cover \`${DOC_APIKEY}\`, \`${SIG_GH_DOC}\`, \`${DOC_SK}\`, \`${DOC_XOXB}\`, \`${DOC_PK}\`; aborts on hit with a named reason. No gitleaks binary (breaks no-sudo constraint)."
-CANON_D10="- **D-10:** Secrets denied + \`.example\` templates only — \`jev.env\` values, \`.git-credentials\` (${SIG_GHO} token), \`.claude.json\` IDs never versioned; \`jev.env.example\` carries names only; keys re-entered by hand per PC."
-
 allowlist_check() {
   local path="$1" text="$2"
   case "$path" in
@@ -70,7 +68,6 @@ allowlist_check() {
     *) return 1 ;;
   esac
   [ "$text" = "$CANON_D09" ] && return 0
-  [ "$text" = "$CANON_D10" ] && return 0
   return 1
 }
 

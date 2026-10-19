@@ -31,11 +31,11 @@ No necesitas WSL.
 New-Item -ItemType Directory -Force "$HOME\code" | Out-Null
 git clone https://github.com/FacundoECornet/Habitat.git "$HOME\code\habitat"
 Set-Location "$HOME\code\habitat"
-opencode auth login
+opencode.cmd auth list
+# Solo si OpenCode Zen no aparece en la lista:
+opencode.cmd auth login
 powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -WithDeps -WithGsd
 ```
-
-> Si `opencode auth login` falla con "la ejecución de scripts está deshabilitada", usá `opencode.cmd auth login` (o habilitá los shims de npm/pnpm con `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`).
 
 </details>
 
@@ -48,11 +48,15 @@ Instala Git, Node.js/npm y OpenCode siguiendo sus guías oficiales. En WSL, ejec
 mkdir -p ~/code
 git clone https://github.com/FacundoECornet/Habitat.git ~/code/habitat
 cd ~/code/habitat
+opencode auth list
+# Solo si OpenCode Zen no aparece en la lista:
 opencode auth login
 node tools/install.mjs --with-deps --with-gsd
 ```
 
 </details>
+
+Si `auth list` no muestra **OpenCode Zen**, ejecuta `auth login` y selecciónalo. Habitat instala MCP JEV globalmente para tu usuario y reutiliza credencial guardada por OpenCode; proyectos nuevos la reciben sin configuración propia ni una segunda API key.
 
 El instalador restaura la configuración y ejecuta una verificación al final. Puedes volver a comprobarla cuando quieras:
 
@@ -60,9 +64,13 @@ El instalador restaura la configuración y ejecuta una verificación al final. P
 node tools/verify.mjs
 ```
 
+Al terminar, cierra y vuelve a abrir OpenCode para cargar el MCP global y los plugins.
+
 > **¿Solo quieres restaurar el entorno?** Ejecuta `node tools/install.mjs` sin flags. `--with-deps` instala herramientas opcionales; `--with-gsd` instala GSD.
 
 > El instalador abre un selector de modelos **por rol** (`planner`, `writer`, `executor`, `checker`): cada modelo se aplica a todos los sub-agentes de ese rol, y podes aplicar los mismos 4 a los tres perfiles. `Enter` mantiene, `!` vuelve al default del repo y `q` termina.
+
+Habitat instala `@jkudish/jev-mcp` junto con el resto de dependencias y lo conecta a `jev-1.13-free` en OpenCode Zen. El launcher lee la credencial que `opencode auth login` ya guardó en el perfil local; no pide `TYPESAFE_API_KEY` ni `JEV_API_KEY`. **Jev 1.13 Free está disponible por tiempo limitado.**
 
 ## GSD + JEV, en pocas palabras
 
@@ -106,7 +114,8 @@ Graphify es opcional y requiere Python 3. Sin Python, el resto de Habitat sigue 
 
 - **Falta acceso al clonar:** inicia sesión en GitHub con una cuenta autorizada para el repositorio.
 - **`verify` falla en modelos:** ejecuta `opencode auth login` y vuelve a correr `node tools/verify.mjs`.
-- **JEV no aplica perfil:** revisa la configuración del proveedor o usa `gsd-route easy|medium|hard`.
+- **JEV falla o MCP muestra timeout:** confirma `OpenCode Zen` con `opencode.cmd auth list` (Windows) o `opencode auth list` (Linux/macOS); vuelve a conectar con `opencode.cmd auth login` / `opencode auth login` y reinicia OpenCode. Diagnóstico MCP: `opencode.cmd --print-logs --log-level DEBUG mcp list` (Windows) o `opencode --print-logs --log-level DEBUG mcp list`.
+- **JEV no aplica perfil:** usa `gsd-route easy|medium|hard` para seleccionar perfil manualmente.
 - **`graphify` no está disponible:** instala Python 3 y vuelve a ejecutar `node tools/install.mjs --with-deps`.
 
 ## Requisitos por tarea

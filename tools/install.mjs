@@ -9,12 +9,11 @@
 //                  anchored §5.5 patch and the $HOME path sanitization, both
 //                  checksum-verified (a mismatch is reported, never silently patched)
 //   5. bin         copy tools/*.mjs to <home>/bin (POSIX) or <home>/bin/*.mjs + *.cmd (win32)
-//   6. jevenv      create ~/.config/opencode/jev.env from jev.env.example if absent
-//   7. restore     tools/restore.mjs (single Node engine; scripts/restore.sh is a shim)
-//   8. verify      tools/verify.mjs
+//   6. restore     tools/restore.mjs (single Node engine; scripts/restore.sh is a shim)
+//   7. verify      tools/verify.mjs
 //
-// The installer never writes credentials: jev.env is only created when absent and
-// only carries names. Backups are timestamped siblings; nothing is deleted.
+// JEV reuses OpenCode Zen credentials from OpenCode's auth store. Backups are
+// timestamped siblings; nothing is deleted.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -94,8 +93,9 @@ function parseArgs(argv) {
           "                  [--pick-models|--no-pick-models] [--models-file FILE] [--yes]",
           "                  [--no-models] [--no-cli]",
           "",
-          "Sin --with-deps/--with-gsd solo copia tools/, crea jev.env (si falta),",
-          "asegura context-mode, restaura el MANIFEST y verifica. En TTY ofrece elegir",
+          "Sin --with-deps/--with-gsd copia tools/, asegura context-mode,",
+          "restaura el MANIFEST y verifica. JEV reutiliza credenciales OpenCode Zen.",
+          "En TTY ofrece elegir",
           "modelos; las elecciones locales guardadas quedan disponibles para gsd-route.",
           "Nada se borra: archivos reemplazados se respaldan antes.",
         ].join("\n"),
@@ -197,9 +197,11 @@ function successBanner(options) {
       "  HABITAT INSTALADO",
       "============================================================",
       `  Config restaurada en:  ${options.home}`,
-      "  Autenticá OpenCode:    opencode auth login",
+      "  JEV reutiliza OpenCode Zen; no requiere otra API key.",
+      "  Si falta la conexión: opencode auth login",
       "                         (Windows con ExecutionPolicy: opencode.cmd auth login)",
       "  Reabrí la terminal para que tome el PATH (~/bin).",
+      "  Cerrá y reabrí OpenCode para cargar MCP y plugins.",
       "  Verificá cuando quieras:  node tools/verify.mjs",
       "============================================================",
       "",
@@ -543,53 +545,39 @@ function copyBin(options) {
   return true;
 }
 
-function copyModelPickerSupport(options) {
-  const source = path.join(options.repo, "lib", "model-pick.mjs");
+function copySupportModules(options) {
+  const names = ["model-pick.mjs", "opencode-auth.mjs"];
+  const sourceDir = path.join(options.repo, "lib");
   const targetDir = path.join(options.home, "lib");
-  const target = path.join(targetDir, "model-pick.mjs");
   if (options.dryRun) {
-    log("bin", `dry-run: se copiaría módulo de soporte a ${target}`);
+    for (const name of names) log("bin", `dry-run: se copiaría módulo de soporte a ${path.join(targetDir, name)}`);
     return true;
   }
-  let temporary = null;
-  try {
-    if (fs.existsSync(target) && !fs.lstatSync(target).isSymbolicLink() &&
-        fs.readFileSync(target).equals(fs.readFileSync(source))) return true;
-    if (fs.existsSync(target)) {
-      backupFile(target, options.home);
-      if (fs.lstatSync(target).isSymbolicLink()) fs.unlinkSync(target);
+  fs.mkdirSync(targetDir, { recursive: true });
+  for (const name of names) {
+    const source = path.join(sourceDir, name);
+    const target = path.join(targetDir, name);
+    let temporary = null;
+    try {
+      if (fs.existsSync(target) && !fs.lstatSync(target).isSymbolicLink() &&
+          fs.readFileSync(target).equals(fs.readFileSync(source))) continue;
+      if (fs.existsSync(target)) {
+        backupFile(target, options.home);
+        if (fs.lstatSync(target).isSymbolicLink()) fs.unlinkSync(target);
+      }
+      temporary = `${target}.tmp-${process.pid}-${Date.now()}`;
+      fs.copyFileSync(source, temporary, fs.constants.COPYFILE_EXCL);
+      fs.renameSync(temporary, target);
+      temporary = null;
+      log("bin", `módulo de soporte copiado a ${target}`);
+    } catch (error) {
+      if (temporary) {
+        try { fs.rmSync(temporary, { force: true }); } catch {}
+      }
+      fail(`no se pudo instalar módulo de soporte ${name}: ${error.message}`);
+      return false;
     }
-    fs.mkdirSync(targetDir, { recursive: true });
-    temporary = `${target}.tmp-${process.pid}-${Date.now()}`;
-    fs.copyFileSync(source, temporary, fs.constants.COPYFILE_EXCL);
-    fs.renameSync(temporary, target);
-    temporary = null;
-    log("bin", `módulo de soporte copiado a ${target}`);
-    return true;
-  } catch (error) {
-    if (temporary) {
-      try { fs.rmSync(temporary, { force: true }); } catch {}
-    }
-    fail(`no se pudo instalar módulo de gsd-model-pick: ${error.message}`);
-    return false;
   }
-}
-
-function ensureJevEnv(options) {
-  const example = path.join(options.repo, "jev.env.example");
-  const target = path.join(options.home, ".config", "opencode", "jev.env");
-  if (fs.existsSync(target)) {
-    log("jevenv", `${target} ya existe — no se toca`);
-    return true;
-  }
-  if (options.dryRun) {
-    log("jevenv", `dry-run: se crearía ${target} desde jev.env.example`);
-    return true;
-  }
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.copyFileSync(example, target);
-  fs.chmodSync(target, 0o600);
-  log("jevenv", `${target} creado desde jev.env.example — completá los valores a mano (nunca se commitean)`);
   return true;
 }
 
@@ -708,8 +696,7 @@ function main() {
   }
 
   if (!copyBin(options)) process.exit(EXIT_FAILED);
-  if (!copyModelPickerSupport(options)) process.exit(EXIT_FAILED);
-  if (!ensureJevEnv(options)) process.exit(EXIT_FAILED);
+  if (!copySupportModules(options)) process.exit(EXIT_FAILED);
 
   if (options.skipPlugins) log("plugins", "omitido (--skip-plugins)");
   else if (options.dryRun) log("plugins", "dry-run: se verificaría/instalaría context-mode");

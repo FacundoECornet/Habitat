@@ -149,12 +149,3 @@ if [ -d "$HOME/bin" ]; then
     export PATH="$HOME/bin:$PATH"
 fi
 
-# Jev / TypeSafe API key — carga portable (sed, sin grep -P) y sin valores en el repo.
-# El archivo ~/.config/opencode/jev.env lo crea tools/install.mjs desde jev.env.example.
-if [ -f "$HOME/.config/opencode/jev.env" ]; then
-    JEV_KEY="$(sed -n 's/^TYPESAFE_API_KEY=//p' "$HOME/.config/opencode/jev.env" | head -n 1)"
-    if [ -n "$JEV_KEY" ]; then
-        export TYPESAFE_API_KEY="$JEV_KEY"
-    fi
-    unset JEV_KEY
-fi

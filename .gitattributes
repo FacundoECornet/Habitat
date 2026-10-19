@@ -1,4 +1,4 @@
-# .gitattributes — Habitat: el tooling asume LF (anclas de parche, bash, jev.env).
+# .gitattributes — Habitat: el tooling asume LF (anclas de parche, bash, checksums).
 # F-10: sin estos pins, un checkout Windows (core.autocrlf=true) deja CRLF y
 # rompe extractAnchors de install.mjs + todos los .sh. Alcance mínimo: solo
 # archivos funcionales; el resto del payload documental queda con el default.
@@ -15,7 +15,6 @@ scripts/*.tsv text eol=lf
 
 # Manifiestos y config funcional (JSON.parse tolera CRLF, pero LF evita ruido)
 MANIFEST.json text eol=lf
-jev.env.example text eol=lf
 home/.config/opencode/gsd-router/*.json text eol=lf
 home/.config/opencode/opencode.jsonc text eol=lf
 home/.config/opencode/gsd-file-manifest.json text eol=lf

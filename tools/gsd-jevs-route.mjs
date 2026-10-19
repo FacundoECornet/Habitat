@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
+import { jevMcpEntry, openCodeZenApiKey, withSystemCa } from "../lib/opencode-auth.mjs";
 
 const EXIT_OK = 0;
 const EXIT_USAGE = 1;
@@ -114,7 +115,7 @@ function providerEnvironment(provider, key) {
     env.JEV_API_KEY = key;
   }
   if (provider.model) env.JEV_MCP_MODEL = provider.model;
-  return env;
+  return withSystemCa(env);
 }
 
 function mockResult(providerId) {
@@ -145,8 +146,10 @@ async function callJevClassify(provider, key, arguments_) {
     return mocked;
   }
 
-  const command = process.env.GSD_JEV_MCP_COMMAND ?? "npx -y @jkudish/jev-mcp";
-  const [bin, ...binArgs] = command.split(/\s+/).filter(Boolean);
+  const override = process.env.GSD_JEV_MCP_COMMAND;
+  const [bin, ...binArgs] = override
+    ? override.split(/\s+/).filter(Boolean)
+    : [process.execPath, jevMcpEntry(path.dirname(routerDir()))];
   const timeoutMs = Number(process.env.GSD_JEV_TIMEOUT_MS ?? 25000);
 
   return await new Promise((resolve, reject) => {
@@ -155,6 +158,7 @@ async function callJevClassify(provider, key, arguments_) {
       child = spawn(bin, binArgs, {
         env: providerEnvironment(provider, key),
         stdio: ["pipe", "pipe", "pipe"],
+        shell: Boolean(override) && process.platform === "win32",
       });
     } catch (error) {
       reject(new Error(`no se pudo lanzar el servidor JEV: ${error.message}`));
@@ -322,9 +326,15 @@ async function main() {
 
   const failures = [];
   for (const provider of providers) {
-    const key = provider.key_env ? process.env[provider.key_env] : "";
+    const key = provider.key_env === "OPENCODE_API_KEY"
+      ? openCodeZenApiKey()
+      : provider.key_env ? process.env[provider.key_env] : "";
     if (!key) {
-      failures.push(`${provider.id}: falta ${provider.key_env ?? "key"}`);
+      failures.push(
+        provider.key_env === "OPENCODE_API_KEY"
+          ? `${provider.id}: falta credencial OpenCode Zen (opencode auth login)`
+          : `${provider.id}: falta ${provider.key_env ?? "key"}`,
+      );
       continue;
     }
     let verdict;

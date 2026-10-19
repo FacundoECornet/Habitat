@@ -18,6 +18,7 @@ import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { PROFILE_NAMES, loadOverlay, mergeOverlay } from "../lib/model-pick.mjs";
+import { openCodeZenApiKey } from "../lib/opencode-auth.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -136,6 +137,74 @@ function checkMcp(home, repo) {
     problems.length === 0,
     problems.length === 0 ? `${mcpCount} servidores MCP parseables` : problems.join("; "),
     "corregí el JSON del MCP en opencode.json(c); verify falla en el primer parse roto",
+  );
+}
+
+function checkJevMcp(home) {
+  const configDir = path.join(home, ".config", "opencode");
+  const configPath = path.join(configDir, "opencode.jsonc");
+  let config;
+  try {
+    config = readJsonish(configPath);
+  } catch (error) {
+    check("jev-mcp", false, `config MCP ilegible: ${error.message}`, "restaurá opencode.jsonc desde Habitat");
+    return;
+  }
+  const command = config.mcp?.jev?.command;
+  const expectedShim = path.join(
+    home,
+    "bin",
+    process.platform === "win32" ? "habitat-jev-mcp.cmd" : "habitat-jev-mcp",
+  );
+
+  if (!Array.isArray(command) || command[0] !== "habitat-jev-mcp") {
+    check(
+      "jev-mcp",
+      false,
+      "opencode MCP `jev` no usa habitat-jev-mcp",
+      "restaurá opencode.jsonc desde Habitat",
+    );
+    return;
+  }
+  if (!fs.existsSync(expectedShim)) {
+    check("jev-mcp", false, `falta launcher: ${expectedShim}`, "ejecutá node tools/install.mjs para copiar tools/ a ~/bin");
+    return;
+  }
+  try {
+    const packageJson = JSON.parse(fs.readFileSync(path.join(configDir, "package.json"), "utf8"));
+    if (!packageJson.dependencies?.["@jkudish/jev-mcp"]) throw new Error("dependencia no declarada");
+    const moduleEntry = createRequire(path.join(configDir, "package.json")).resolve("@jkudish/jev-mcp");
+    if (!fs.existsSync(path.join(path.dirname(moduleEntry), "index.js"))) throw new Error("entrypoint MCP ausente");
+  } catch (error) {
+    check(
+      "jev-mcp",
+      false,
+      `paquete MCP no instalado: ${error.message}`,
+      "ejecutá npm ci en ~/.config/opencode o reinstalá Habitat",
+    );
+    return;
+  }
+  let apiKey;
+  try {
+    apiKey = openCodeZenApiKey({ home });
+  } catch (error) {
+    check("jev-mcp", false, error.message, "revisá el perfil de autenticación de OpenCode");
+    return;
+  }
+  if (!apiKey) {
+    check("jev-mcp", false, "falta credencial OpenCode Zen", "ejecutá opencode auth login y conecta OpenCode Zen");
+    return;
+  }
+
+  const result = runTool("opencode", ["mcp", "list"], 20000);
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n").replace(/\u001b\[[0-9;]*m/g, "");
+  const line = output.split(/\r?\n/).find((entry) => /\bjev\b/i.test(entry));
+  const ok = result.status === 0 && line && !/(?:failed|timeout|✗|error)/i.test(line);
+  check(
+    "jev-mcp",
+    Boolean(ok),
+    ok ? line.trim() : line?.trim() || `OpenCode no confirmó conexión${result.error ? `: ${result.error.message}` : ""}`,
+    "ejecutá `opencode.cmd --print-logs --log-level DEBUG mcp list` (Windows) o `opencode --print-logs --log-level DEBUG mcp list`; revisá JEV MCP y OpenCode Zen",
   );
 }
 
@@ -399,6 +468,7 @@ function main() {
 
   checkManifest(options.repo, options.home);
   checkMcp(options.home, options.repo);
+  checkJevMcp(options.home);
   if (!options.noCli) checkCli();
   checkPlugins(options.home);
   checkDiscovery(options.home);

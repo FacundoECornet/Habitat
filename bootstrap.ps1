@@ -57,7 +57,7 @@ if ($nodeMajor -notin @(22, 24, 26)) {
 }
 Write-Host "bootstrap: node $nodeVersion"
 
-# --- 2. Install: copy tools, jev.env, restore and (optionally) deps/GSD ------
+# --- 2. Install: copy tools, restore and (optionally) deps/GSD ---------------
 $installArgs = @((Join-Path $Repo 'tools\install.mjs'), '--home', $TargetHome, '--repo', $Repo)
 if ($WithDeps) { $installArgs += '--with-deps' }
 if ($WithGsd) { $installArgs += '--with-gsd' }
