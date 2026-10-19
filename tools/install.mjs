@@ -24,6 +24,7 @@ import { createRequire } from "node:module";
 import { planBin, cmdShim } from "../lib/bins.mjs";
 import { mergeOverlay, readModelFile, readProfiles, repoPointerPath } from "../lib/model-pick.mjs";
 import { canonicalHome, expandHome } from "../lib/home-placeholder.mjs";
+import { isCertificateError, withSystemCaAnyPlatform } from "../lib/opencode-auth.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -165,6 +166,20 @@ function run(command, args, options = {}) {
     env,
   });
   return result;
+}
+
+// A registry call that fails on the certificate chain is retried once against
+// the system CA store: corporate networks that intercept TLS need the
+// interception certificate, which Node's bundled list does not carry.
+function runWithCertRetry(command, args, options = {}) {
+  const first = run(command, args, options);
+  if (first.status === 0) return first;
+  const output = [first.stdout, first.stderr, first.error?.message].filter(Boolean).join("\n");
+  if (!isCertificateError(output)) return first;
+  const retryEnv = withSystemCaAnyPlatform(options.env ?? process.env);
+  if (retryEnv === (options.env ?? process.env)) return first;
+  log("run", "fallo de certificado; reintento con el almacén de CA del sistema");
+  return run(command, args, { ...options, env: retryEnv });
 }
 
 // Long captured commands (npm installs) print nothing while they run; this
@@ -316,7 +331,7 @@ function installDeps(options) {
   const commands = [["npm", ["install", "-g", DEPS.gsd]]];
   for (const [command, args] of commands) {
     const spin = spinner(`${command} ${args.join(" ")}`);
-    const result = run(command, args, { capture: true });
+    const result = runWithCertRetry(command, args, { capture: true });
     spin.stop(result.status === 0);
     if (result.status !== 0) {
       fail(`${command} ${args.join(" ")} falló${errorDetail(result)}`);
@@ -381,7 +396,7 @@ function ensurePlugins(options) {
   }
   log("plugins", `instalando ${DEPS.contextMode}`);
   const spin = spinner(`npm install -g ${DEPS.contextMode}`);
-  const result = run("npm", ["install", "-g", DEPS.contextMode], { capture: true });
+  const result = runWithCertRetry("npm", ["install", "-g", DEPS.contextMode], { capture: true });
   spin.stop(result.status === 0);
   if (result.status !== 0) {
     fail(`${DEPS.contextMode} no se pudo instalar (npm falló)${errorDetail(result)}; verify lo reportará`);
@@ -685,7 +700,7 @@ function main() {
       log("gsd", "dry-run: se correría el instalador GSD y se re-aplicarían los parches");
     } else {
       log("gsd", "ejecutando instalador GSD (puede tardar)");
-      const install = run("npx", ["-y", "get-shit-done-cc@1.42.3", "--opencode", "--global"], {
+      const install = runWithCertRetry("npx", ["-y", "get-shit-done-cc@1.42.3", "--opencode", "--global"], {
         cwd: options.repo,
       });
       if (install.status !== 0) {

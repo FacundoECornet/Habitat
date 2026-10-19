@@ -25,6 +25,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadValidatedManifest, ManifestError } from "../lib/manifest.mjs";
 import { materialize } from "../lib/home-placeholder.mjs";
+import { isCertificateError, withSystemCaAnyPlatform } from "../lib/opencode-auth.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
@@ -672,10 +673,25 @@ function npmGate(destDir, dest) {
   // with spaces; with an args array + shell, spawnSync concatenates unquoted and
   // cmd.exe splits at the first space ("C:\Program" not found). Quote the spaces.
   const win = process.platform === "win32";
-  const r = win
-    ? spawnSync(`"${npm}" ci`, { cwd: destDir, stdio: "inherit", env: process.env, shell: true })
-    : spawnSync(npm, ["ci"], { cwd: destDir, stdio: "inherit", env: process.env, shell: false });
-  if (r.status === 0) {
+  const runCi = (env) => {
+    const r = win
+      ? spawnSync(`"${npm}" ci`, { cwd: destDir, encoding: "utf8", env, shell: true })
+      : spawnSync(npm, ["ci"], { cwd: destDir, encoding: "utf8", env, shell: false });
+    const output = [r.stdout, r.stderr].filter(Boolean).join("\n");
+    if (output.trim()) process.stdout.write(output);
+    return { status: r.status, output };
+  };
+
+  let attempt = runCi(process.env);
+  if (attempt.status !== 0 && isCertificateError(attempt.output)) {
+    // Corporate TLS interception: retry once against the system CA store.
+    const retryEnv = withSystemCaAnyPlatform(process.env);
+    if (retryEnv !== process.env) {
+      out("npm ci: fallo de certificado; reintento con el almacén de CA del sistema");
+      attempt = runCi(retryEnv);
+    }
+  }
+  if (attempt.status === 0) {
     try { fs.mkdirSync(nm, { recursive: true }); } catch { /* ignore */ }
     try { fs.writeFileSync(marker, npmDigest(pkg, lock)); } catch { /* ignore */ }
     out("npm ci: installed (" + dest + ")");
