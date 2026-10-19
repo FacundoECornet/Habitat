@@ -62,6 +62,8 @@ node tools/verify.mjs
 
 > **¿Solo quieres restaurar el entorno?** Ejecuta `node tools/install.mjs` sin flags. `--with-deps` instala herramientas opcionales; `--with-gsd` instala GSD.
 
+> El instalador abre un selector de modelos **por rol** (`planner`, `writer`, `executor`, `checker`): cada modelo se aplica a todos los sub-agentes de ese rol, y podes aplicar los mismos 4 a los tres perfiles. `Enter` mantiene, `!` vuelve al default del repo y `q` termina.
+
 ## GSD + JEV, en pocas palabras
 
 JEV estima la dificultad del proyecto y Habitat asigna un perfil de modelos a los agentes GSD. Si la clasificación no es segura, no cambia nada: puedes elegir perfil manualmente.

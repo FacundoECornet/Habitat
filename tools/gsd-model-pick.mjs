@@ -31,9 +31,10 @@ function usage() {
     "       gsd-model-pick --profile PROFILE --role ROLE --model PROVIDER/MODEL",
     "       gsd-model-pick --list",
     "",
-    "Sin flags, abre editor interactivo por perfil si stdin es TTY.",
-    "En el prompt: Enter mantiene, ! usa default del repo, * salta perfil, q termina.",
-    "Atajo bulk por perfil: @planner=ID, @writer=ID, @executor=ID, @checker=ID.",
+    "Sin flags, abre el selector interactivo por rol si stdin es TTY.",
+    "En el prompt: Enter mantiene, ! usa default del repo, * salta, q termina.",
+    "Cada modelo elegido se aplica a todos los sub-agentes del rol.",
+    "En el ajuste individual: @planner=ID aplica el ID a todo el rol.",
     "",
   ].join("\n"));
 }
@@ -145,60 +146,144 @@ function printMatrix(matrix) {
   }
 }
 
-async function editMatrix(matrix, defaults, rl) {
-  let finishAll = false;
-  stdout.write("Selector de modelos GSD. Enter=mantener, !=default repo, *=saltar perfil, q=terminar.\n");
-  stdout.write("Atajo bulk opcional por perfil: @planner=model, @writer=model, @executor=model, @checker=model.\n");
-  for (const profile of PROFILE_NAMES) {
-    stdout.write(`\n=== Perfil ${profile} ===\n`);
-    let skipAgents = new Set();
-    for (const group of orderedAgents(matrix, profile)) {
-      for (const agent of group.agents) {
-        if (finishAll) break;
-        if (skipAgents.has(agent)) continue;
-        while (true) {
-          const value = (await rl.question(`[${group.role}] ${agent} [${matrix[profile][agent]}] > `)).trim();
-          if (value === "") break;
-          if (value === "*") {
-            skipAgents = new Set(Object.keys(matrix[profile]));
-            break;
-          }
-          if (value.toLowerCase() === "q") {
-            finishAll = true;
-            break;
-          }
-          if (value === "!") {
-            matrix[profile][agent] = defaults[profile].model_overrides[agent];
-            break;
-          }
-          const bulk = value.match(/^@([a-z-]+)=(.+)$/);
-          if (bulk) {
-            const [, role, model] = bulk;
-            if (!ROLE_GROUPS[role]) {
-              stdout.write(`Rol inválido. Opciones: ${Object.keys(ROLE_GROUPS).join(", ")}\n`);
-              continue;
-            }
-            if (!validateModelId(model)) {
-              stdout.write("ID inválido; usa proveedor/modelo.\n");
-              continue;
-            }
-            const members = roleAgents(matrix, role);
-            for (const member of members) matrix[profile][member] = model;
-            skipAgents = new Set([...skipAgents, ...members]);
-            stdout.write(`${members.length} agentes de ${role} actualizados en ${profile}.\n`);
-            break;
-          }
-          if (!validateModelId(value)) {
-            stdout.write("ID inválido; usa proveedor/modelo (ej. opencode-go/mimo-v2.6-pro).\n");
-            continue;
-          }
-          matrix[profile][agent] = value;
+function roleModel(matrix, profile, role) {
+  const models = new Set(
+    roleAgents(matrix, role)
+      .filter((agent) => Object.hasOwn(matrix[profile], agent))
+      .map((agent) => matrix[profile][agent]),
+  );
+  return models.size === 1 ? [...models][0] : null;
+}
+
+function roleModelAcross(matrix, profiles, role) {
+  const models = new Set();
+  for (const profile of profiles) {
+    const model = roleModel(matrix, profile, role);
+    if (model === null) return null;
+    models.add(model);
+  }
+  return models.size === 1 ? [...models][0] : null;
+}
+
+function setRoleModel(matrix, role, profiles, model) {
+  const members = new Set(ROLE_GROUPS[role]);
+  for (const profile of profiles) {
+    for (const agent of Object.keys(matrix[profile])) {
+      if (members.has(agent)) matrix[profile][agent] = model;
+    }
+  }
+}
+
+function resetRoleModel(matrix, defaults, role, profiles) {
+  const members = new Set(ROLE_GROUPS[role]);
+  for (const profile of profiles) {
+    for (const agent of Object.keys(matrix[profile])) {
+      if (members.has(agent)) matrix[profile][agent] = defaults[profile].model_overrides[agent];
+    }
+  }
+}
+
+function roleMembers(matrix, role) {
+  const members = new Set(ROLE_GROUPS[role]);
+  return Object.keys(matrix[PROFILE_NAMES[0]] ?? {}).filter((agent) => members.has(agent));
+}
+
+async function askRole(matrix, defaults, rl, role, profiles) {
+  const shown =
+    profiles.length === 1 ? roleModel(matrix, profiles[0], role) : roleModelAcross(matrix, profiles, role);
+  const label = `${roleMembers(matrix, role).length} agentes`;
+  while (true) {
+    const value = (await rl.question(`[${role}] ${label} [${shown ?? "mixto"}] > `)).trim();
+    if (value === "") return "keep";
+    if (value.toLowerCase() === "q") return "quit";
+    if (value === "*") return "skip";
+    if (value === "!") {
+      resetRoleModel(matrix, defaults, role, profiles);
+      return "set";
+    }
+    if (!validateModelId(value)) {
+      stdout.write("ID inválido; usa proveedor/modelo (ej. opencode-go/mimo-v2.6-pro).\n");
+      continue;
+    }
+    setRoleModel(matrix, role, profiles, value);
+    return "set";
+  }
+}
+
+async function editAgents(matrix, defaults, rl, profile) {
+  let skipAgents = new Set();
+  for (const group of orderedAgents(matrix, profile)) {
+    for (const agent of group.agents) {
+      if (skipAgents.has(agent)) continue;
+      while (true) {
+        const value = (await rl.question(`[${group.role}] ${agent} [${matrix[profile][agent]}] > `)).trim();
+        if (value === "") break;
+        if (value === "*") {
+          skipAgents = new Set(Object.keys(matrix[profile]));
           break;
         }
+        if (value.toLowerCase() === "q") return "quit";
+        if (value === "!") {
+          matrix[profile][agent] = defaults[profile].model_overrides[agent];
+          break;
+        }
+        const bulk = value.match(/^@([a-z-]+)=(.+)$/);
+        if (bulk) {
+          const [, role, model] = bulk;
+          if (!ROLE_GROUPS[role]) {
+            stdout.write(`Rol inválido. Opciones: ${Object.keys(ROLE_GROUPS).join(", ")}\n`);
+            continue;
+          }
+          if (!validateModelId(model)) {
+            stdout.write("ID inválido; usa proveedor/modelo.\n");
+            continue;
+          }
+          const members = roleAgents(matrix, role);
+          setRoleModel(matrix, role, [profile], model);
+          for (const member of members) skipAgents.add(member);
+          break;
+        }
+        if (!validateModelId(value)) {
+          stdout.write("ID inválido; usa proveedor/modelo (ej. opencode-go/mimo-v2.6-pro).\n");
+          continue;
+        }
+        matrix[profile][agent] = value;
+        break;
       }
-      if (finishAll || skipAgents.size === Object.keys(matrix[profile]).length) break;
     }
-    if (finishAll) break;
+    if (skipAgents.size === Object.keys(matrix[profile]).length) break;
+  }
+  return "ok";
+}
+
+async function editMatrix(matrix, defaults, rl) {
+  stdout.write("Selector de modelos GSD por rol. Enter=mantener, !=default repo, *=saltar, q=terminar.\n");
+  stdout.write("Cada modelo se aplica a todos los sub-agentes del rol.\n");
+  const same = (await rl.question("¿Aplicar los mismos 4 modelos a easy, medium y hard? [s/N] > ")).trim().toLowerCase();
+  if (["s", "si", "sí", "y", "yes"].includes(same)) {
+    for (const role of Object.keys(ROLE_GROUPS)) {
+      const outcome = await askRole(matrix, defaults, rl, role, PROFILE_NAMES);
+      if (outcome === "quit" || outcome === "skip") return matrix;
+    }
+    return matrix;
+  }
+  for (const profile of PROFILE_NAMES) {
+    stdout.write(`\n=== Perfil ${profile} ===\n`);
+    let skipProfile = false;
+    for (const role of Object.keys(ROLE_GROUPS)) {
+      const outcome = await askRole(matrix, defaults, rl, role, [profile]);
+      if (outcome === "quit") return matrix;
+      if (outcome === "skip") {
+        skipProfile = true;
+        break;
+      }
+    }
+    if (skipProfile) continue;
+    const fine = (await rl.question(`¿Ajustar agentes individuales de ${profile}? [s/N] > `)).trim().toLowerCase();
+    if (["s", "si", "sí", "y", "yes"].includes(fine)) {
+      const outcome = await editAgents(matrix, defaults, rl, profile);
+      if (outcome === "quit") return matrix;
+    }
   }
   return matrix;
 }
