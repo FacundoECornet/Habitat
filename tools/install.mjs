@@ -121,6 +121,23 @@ function fail(message) {
   warn(message);
 }
 
+function errorDetail(result) {
+  const parts = [result.error?.message, result.stderr, result.stdout].filter(Boolean).join("\n").trim();
+  if (!parts) return "";
+  return `\n${parts.split(/\r?\n/).filter(Boolean).slice(-10).join("\n")}`;
+}
+
+function childEnv(base) {
+  const env = { ...(base ?? process.env) };
+  if (IS_WIN) {
+    const options = env.NODE_OPTIONS ?? "";
+    if (!options.includes("--use-system-ca") && !options.includes("--use-openssl-ca")) {
+      env.NODE_OPTIONS = `${options} --use-system-ca`.trim();
+    }
+  }
+  return env;
+}
+
 function run(command, args, options = {}) {
   // Windows: .cmd/.bat shims (npm, opencode) only spawn through cmd.exe, and
   // an exe path with spaces ("C:\Program Files\nodejs\node.exe") must carry
@@ -128,6 +145,7 @@ function run(command, args, options = {}) {
   // unquoted and cmd.exe splits at the first space ("C:\Program" not found).
   // Empirical cmd.exe rules: quote only parts containing spaces — quoting a
   // bare shim name ("npm") makes the command fail with a silent exit 1.
+  const env = childEnv(options.env);
   if (IS_WIN) {
     const q = (s) => (/\s/.test(s) ? `"${s}"` : s);
     const line = [q(command), ...args.map(q)].join(" ");
@@ -135,7 +153,7 @@ function run(command, args, options = {}) {
       encoding: "utf8",
       stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
       cwd: options.cwd,
-      env: options.env ?? process.env,
+      env,
       shell: true,
     });
   }
@@ -143,7 +161,7 @@ function run(command, args, options = {}) {
     encoding: "utf8",
     stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
     cwd: options.cwd,
-    env: options.env ?? process.env,
+    env,
   });
   return result;
 }
@@ -239,8 +257,9 @@ function installDeps(options) {
   log("deps", "instalando dependencias globales declaradas");
   const commands = [["npm", ["install", "-g", DEPS.gsd]]];
   for (const [command, args] of commands) {
-    if (run(command, args, { capture: true }).status !== 0) {
-      fail(`${command} ${args.join(" ")} falló`);
+    const result = run(command, args, { capture: true });
+    if (result.status !== 0) {
+      fail(`${command} ${args.join(" ")} falló${errorDetail(result)}`);
       return false;
     }
   }
@@ -260,7 +279,7 @@ function installDeps(options) {
         capture: true,
       });
       if (pip.status !== 0) {
-        fail("graphifyy no se pudo instalar (uv/pipx/pip fallaron)");
+        fail(`graphifyy no se pudo instalar (uv/pipx/pip fallaron)${errorDetail(pip)}`);
         return false;
       }
     }
@@ -300,7 +319,7 @@ function ensurePlugins(options) {
   log("plugins", `instalando ${DEPS.contextMode}`);
   const result = run("npm", ["install", "-g", DEPS.contextMode], { capture: true });
   if (result.status !== 0) {
-    fail(`${DEPS.contextMode} no se pudo instalar (npm falló); verify lo reportará`);
+    fail(`${DEPS.contextMode} no se pudo instalar (npm falló)${errorDetail(result)}; verify lo reportará`);
     return false;
   }
   log("plugins", "context-mode instalado globalmente");

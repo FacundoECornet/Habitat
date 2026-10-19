@@ -369,8 +369,13 @@ async function main() {
         stdout.write("\nSin cambios de modelos: se mantienen los perfiles del repo.\n");
         return 0;
       }
-      stdout.write(`\n${changed.length} celdas cambiadas en total.\nGuardar y continuar instalación? [S/n] `);
-      const answer = (await rl.question("")).trim().toLowerCase();
+      const answer = (
+        await rl.question(
+          `\n${changed.length} celdas cambiadas en total.\nGuardar y continuar instalación? [S/n] `,
+        )
+      )
+        .trim()
+        .toLowerCase();
       if (["n", "no"].includes(answer)) {
         stdout.write("Modelos NO guardados: se usan los defaults del repo. Podes elegirlos cuando quieras con: node tools/gsd-model-pick.mjs\n");
         return 0;
