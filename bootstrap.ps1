@@ -12,7 +12,7 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$Repo = $PSScriptRoot,
+  [string]$Repo,
   [string]$TargetHome = $env:USERPROFILE,
   [switch]$WithDeps,
   [switch]$WithGsd
@@ -24,6 +24,24 @@ function Fail([string]$Message) {
   Write-Host "bootstrap: $Message" -ForegroundColor Red
   exit 1
 }
+
+# --- 0. Repo root ------------------------------------------------------------
+# Windows PowerShell 5.1 leaves $PSScriptRoot empty inside param() defaults for
+# advanced scripts invoked with `powershell -File` (PowerShell/PowerShell#4688),
+# so resolve it here instead of in the parameter block.
+if (-not $Repo) { $Repo = $PSScriptRoot }
+if (-not $Repo) { $Repo = Split-Path -Parent $MyInvocation.MyCommand.Path }
+if (-not $Repo) {
+  Fail "no pude resolver la ruta del repo; pasa -Repo <ruta del clon>."
+}
+if (-not (Test-Path (Join-Path $Repo 'tools\install.mjs'))) {
+  Fail "no encuentro tools\install.mjs en '$Repo'; pasa -Repo <ruta del clon>."
+}
+if (-not $TargetHome) {
+  Fail "TargetHome vacio; pasa -TargetHome <ruta>."
+}
+
+Write-Host "bootstrap: repo $Repo - home $TargetHome"
 
 # --- 1. Prerequisites: Node, npm and Git must be on PATH ---------------------
 foreach ($tool in @('node', 'npm', 'git')) {
@@ -37,7 +55,7 @@ $nodeMajor = [int]($nodeVersion.Split('.')[0])
 if ($nodeMajor -notin @(22, 24, 26)) {
   Write-Host "bootstrap: aviso - Node $nodeVersion detectado; Habitat espera 22.22.2+, 24.15+ o 26+." -ForegroundColor Yellow
 }
-Write-Host "bootstrap: node $nodeVersion - repo $Repo - home $TargetHome"
+Write-Host "bootstrap: node $nodeVersion"
 
 # --- 2. Install: copy tools, jev.env, restore and (optionally) deps/GSD ------
 $installArgs = @((Join-Path $Repo 'tools\install.mjs'), '--home', $TargetHome, '--repo', $Repo)

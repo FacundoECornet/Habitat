@@ -35,6 +35,8 @@ opencode auth login
 powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -WithDeps -WithGsd
 ```
 
+> Si `opencode auth login` falla con "la ejecución de scripts está deshabilitada", usá `opencode.cmd auth login` (o habilitá los shims de npm/pnpm con `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`).
+
 </details>
 
 <details>
