@@ -131,7 +131,10 @@ function checkPortablePaths(home) {
         if (text.includes(token)) hits.push(`${path.relative(home, abs)} (${token})`);
       }
       for (const match of text.match(foreignHome) ?? []) {
-        if (match.toLowerCase() === ownHome) continue;
+        const candidate = match.toLowerCase();
+        // The same account's home root is legitimate (the payload expands to
+        // this machine's home); any other login is a foreign absolute path.
+        if (candidate === ownHome || ownHome.startsWith(`${candidate}/`)) continue;
         hits.push(`${path.relative(home, abs)} (${match})`);
       }
     }
