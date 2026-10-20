@@ -166,6 +166,99 @@ function checkPortablePaths(home) {
   );
 }
 
+// The plugin contract changed between OpenCode 1.x and 2.x: 1.x calls
+// `server`, 2.x calls `setup` and only accepts a default export with
+// `id` + `setup`. context-mode ships a 1.x plugin, so on 2.x it does not
+// load; the payload carries a bridge that registers context-mode's MCP
+// server there. This check says which line is in use and which route
+// context-mode has, instead of leaving the user with a green verification
+// and a plugin that silently does nothing.
+function checkOpencodeCli(home) {
+  const result = runTool("opencode", ["--version"], 10000);
+  const version = String(result.stdout ?? "").trim();
+  const major = version.match(/(\d+)\./);
+  if (result.error || result.status !== 0 || !major) {
+    skip(
+      "opencode-cli",
+      "no se encontró el CLI de OpenCode",
+      "instalá OpenCode para validar que los plugins del payload cargan en tu versión",
+    );
+    return;
+  }
+  const line = Number(major[1]);
+
+  const configPath = path.join(home, ".config", "opencode", "opencode.jsonc");
+  let plugins = [];
+  try {
+    const parsed = readJsonish(configPath);
+    if (Array.isArray(parsed.plugin)) plugins = parsed.plugin;
+  } catch (error) {
+    // A config that does not parse is already reported by `mcp-json`.
+  }
+  const native = plugins.includes("context-mode");
+  const bridge = plugins.some((entry) => String(entry).includes("context-mode-bridge"));
+
+  // The bridge writes what it managed to register; it is the runtime proof.
+  let report = null;
+  try {
+    report = JSON.parse(
+      fs.readFileSync(path.join(home, ".config", "opencode", ".habitat-context-mode.json"), "utf8"),
+    );
+  } catch (error) {
+    // No report: the bridge never ran (1.x, or no session yet).
+  }
+
+  if (line >= 2) {
+    if (!bridge) {
+      check(
+        "opencode-cli",
+        false,
+        `OpenCode ${version}: el plugin nativo de context-mode no carga en la línea 2.x y no está el puente`,
+        "corré `node tools/install.mjs` para adaptar la config a la línea 2.x",
+      );
+      return;
+    }
+    if (report && report.ok === false) {
+      check(
+        "opencode-cli",
+        false,
+        `OpenCode ${version}: el puente de context-mode está declarado pero el servidor MCP no levantó (${report.status ?? "sin estado"})`,
+        "revisá que `context-mode` esté instalado globalmente (`npm i -g context-mode`) y corré `context-mode doctor`",
+      );
+      return;
+    }
+    const detail = native
+      ? `OpenCode ${version}: context-mode va por el puente (MCP); el plugin nativo declarado no carga en 2.x — corré \`node tools/install.mjs\` para quitarlo`
+      : `OpenCode ${version}: context-mode va por el puente (MCP)`;
+    check(
+      "opencode-cli",
+      true,
+      report && report.ok ? `${detail} — servidor conectado` : detail,
+      "",
+    );
+    return;
+  }
+
+  if (native) {
+    check("opencode-cli", true, `OpenCode ${version}: context-mode va por su plugin nativo`, "");
+    return;
+  }
+  if (bridge) {
+    check(
+      "opencode-cli",
+      true,
+      `OpenCode ${version}: context-mode va por el puente (MCP), no por su plugin nativo`,
+      "corré `node tools/install.mjs` para usar el plugin nativo en la línea 1.x",
+    );
+    return;
+  }
+  skip(
+    "opencode-cli",
+    `OpenCode ${version}: no hay plugin de context-mode declarado`,
+    "si querés context-mode, declaralo en el plugin de tu opencode.jsonc",
+  );
+}
+
 function checkMcp(home, repo) {
   const candidates = [
     path.join(home, ".config", "opencode", "opencode.json"),
@@ -557,7 +650,10 @@ function main() {
   checkPortablePaths(options.home);
   checkMcp(options.home, options.repo);
   checkJevMcp(options.home);
-  if (!options.noCli) checkCli();
+  if (!options.noCli) {
+    checkCli();
+    checkOpencodeCli(options.home);
+  }
   checkPlugins(options.home);
   checkDiscovery(options.home);
   checkArchify(options.home);

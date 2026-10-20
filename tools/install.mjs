@@ -474,6 +474,116 @@ function disableJevWithoutCredential(options) {
   return true;
 }
 
+// Removes one entry from the `plugin` array of a JSONC text. Returns the
+// original text when the entry is absent; throws when no candidate removal
+// produces a valid config without the entry.
+function removePluginEntry(text, name) {
+  let original;
+  try {
+    original = JSON.parse(stripJsonComments(text));
+  } catch (error) {
+    throw new Error(`config de plugins ilegible: ${error.message}`);
+  }
+  if (!Array.isArray(original?.plugin) || !original.plugin.includes(name)) {
+    return { text, removed: false };
+  }
+
+  const keyPattern = /"plugin"\s*:/g;
+  let match;
+  while ((match = keyPattern.exec(text)) !== null) {
+    const afterColon = match.index + match[0].length;
+    const whitespace = /^\s*/.exec(text.slice(afterColon))[0].length;
+    const arrayStart = afterColon + whitespace;
+    if (text[arrayStart] !== "[") continue;
+    const arrayEnd = findJsonValueEnd(text, arrayStart);
+    if (arrayEnd < 0) continue;
+
+    const body = text.slice(arrayStart + 1, arrayEnd - 1);
+    const elementPattern = new RegExp(`"${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`, "g");
+    let element;
+    while ((element = elementPattern.exec(body)) !== null) {
+      let removeStart = element.index;
+      let removeEnd = element.index + element[0].length;
+
+      // Take the comma that follows the element, or the one that precedes it.
+      let ahead = removeEnd;
+      while (ahead < body.length && /[ \t]/.test(body[ahead])) ahead += 1;
+      if (body[ahead] === ",") {
+        removeEnd = ahead + 1;
+      } else {
+        let previous = removeStart - 1;
+        while (previous >= 0 && /\s/.test(body[previous])) previous -= 1;
+        if (body[previous] === ",") removeStart = previous;
+      }
+      while (removeEnd < body.length && /[ \t]/.test(body[removeEnd])) removeEnd += 1;
+      if (body[removeEnd] === "\r" && body[removeEnd + 1] === "\n") removeEnd += 2;
+      else if (body[removeEnd] === "\n") removeEnd += 1;
+
+      const candidate = text.slice(0, arrayStart + 1) + body.slice(0, removeStart) + body.slice(removeEnd) + text.slice(arrayEnd - 1);
+      let parsed;
+      try {
+        parsed = JSON.parse(stripJsonComments(candidate));
+      } catch {
+        continue;
+      }
+      if (!Array.isArray(parsed?.plugin) || parsed.plugin.includes(name)) continue;
+      return { text: candidate, removed: true };
+    }
+  }
+  throw new Error(`no se pudo quitar el plugin ${name}`);
+}
+
+// The OpenCode major version of the installed CLI, or null when it is not
+// installed. 1.x and 2.x do not share the plugin contract, so the payload
+// has to adapt to the line the user actually runs.
+function opencodeCliMajor(home) {
+  const result = run("opencode", ["--version"], { capture: true });
+  if (result.status !== 0) return null;
+  const version = String(result.stdout ?? "").trim().match(/(\d+)\./);
+  return version ? Number(version[1]) : null;
+}
+
+// context-mode ships a 1.x plugin: on opencode 2.x it does not load at all,
+// and the host logs a plugin error. The payload carries a bridge plugin that
+// registers context-mode's MCP server on 2.x, so the `ctx_*` tools stay
+// available. On 2.x the native entry is removed from the config so the host
+// does not log a plugin that cannot load.
+function adaptContextModeToCli(options) {
+  const major = opencodeCliMajor(options.home);
+  if (major === null) {
+    log("context-mode", "no se encontró el CLI de OpenCode; se deja la config del payload");
+    return true;
+  }
+  if (major < 2) {
+    log("context-mode", `OpenCode ${major}.x: context-mode va por su plugin nativo`);
+    return true;
+  }
+
+  const configDir = path.join(options.home, ".config", "opencode");
+  for (const fileName of ["opencode.jsonc", "opencode.json"]) {
+    const file = path.join(configDir, fileName);
+    if (!fs.existsSync(file)) continue;
+    let result;
+    try {
+      result = removePluginEntry(fs.readFileSync(file, "utf8"), "context-mode");
+    } catch (error) {
+      fail(`no se pudo adaptar context-mode en ${file}: ${error.message}`);
+      return false;
+    }
+    if (!result.removed) continue;
+    try {
+      JSON.parse(stripJsonComments(result.text));
+    } catch (error) {
+      fail(`no se pudo adaptar context-mode en ${file}: config resultante ilegible (${error.message})`);
+      return false;
+    }
+    backupFile(file, options.home);
+    fs.writeFileSync(file, result.text);
+    log("context-mode", `OpenCode ${major}.x: el plugin nativo de context-mode no carga, queda el puente por MCP`);
+  }
+  return true;
+}
+
 function detectPlatform() {
   const platform = process.platform;
   const arch = process.arch;
@@ -976,6 +1086,8 @@ function main() {
   if (!options.dryRun && !rememberRepo(options)) process.exit(EXIT_FAILED);
 
   if (!options.dryRun) activateRepoHooks(options);
+
+  if (!options.dryRun && !adaptContextModeToCli(options)) process.exit(EXIT_FAILED);
 
   if (!options.dryRun && !disableJevWithoutCredential(options)) process.exit(EXIT_FAILED);
 
