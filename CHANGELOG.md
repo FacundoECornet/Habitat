@@ -4,6 +4,22 @@ Todas las novedades de Habitat se registran acá, siguiendo
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [Unreleased]
+
+### Agregado
+
+- **El instalador activa el gate de secretos** en el repo desde el que se instala
+  (`core.hooksPath=.githooks`): hasta ahora habia que activarlo a mano en cada clon. Es
+  configuracion local del repo (la global de Git no se toca) y un `core.hooksPath` propio del
+  usuario no se pisa.
+
+### Documentacion
+
+- Toda la documentacion esta al dia con el estado actual: los nueve checks de `verify`, la
+  regla del catalogo completo, las tres plataformas en CI, el veredicto de drift de la captura,
+  el alcance del gate de secretos, el secreto del job de catalogo y la auditoria de exposicion
+  (0 coincidencias de claves, rutas personales o identidades en todo lo publicado).
+
 ## [0.2.1] - 2026-10-20
 
 ### Agregado
