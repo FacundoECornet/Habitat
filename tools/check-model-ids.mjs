@@ -172,6 +172,10 @@ function main() {
     checked: references.length,
     missing,
     unverifiable,
+    hint:
+      missing.length === 0
+        ? ""
+        : "Cambiá la celda con `gsd-model-pick --profile <perfil> --agent <agente> --model <id>` y actualizá el payload del repo en home/.config/opencode/gsd-router/.",
   };
 
   if (options.json) {
@@ -186,7 +190,10 @@ function main() {
       process.stdout.write(`RETIRADO: ${item.model} — ${item.where}\n`);
     }
     if (missing.length === 0) process.stdout.write("check-model-ids: ok\n");
-    else process.stdout.write(`check-model-ids: ${missing.length} id(s) fuera del catálogo\n`);
+    else {
+      process.stdout.write(`check-model-ids: ${missing.length} id(s) fuera del catálogo\n`);
+      process.stdout.write(`${summary.hint}\n`);
+    }
   }
 
   process.exit(missing.length === 0 ? EXIT_OK : EXIT_FAILED);
