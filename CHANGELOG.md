@@ -27,7 +27,7 @@ un clone nuevo del repo público.
 
 ### Agregado
 
-- `docs/EVIDENCE-WINDOWS.md`: evidencia fechada del flujo Windows nativo completo
+- Evidencia fechada del flujo Windows nativo completo (hoy en `docs/EVIDENCE.md`)
   (`bootstrap.ps1 -WithDeps -WithGsd`, verify, `npm.cmd test`) sobre un clone nuevo.
 - Tests nuevos: resolución de ejecutables por plataforma, check `cli-tools` sin CLIs opcionales
   y binarios instalados autocontenidos.
@@ -54,7 +54,7 @@ Ajustes sobre la publicación inicial.
 
 ### Agregado
 
-- `docs/EVIDENCE-LINUX.md`: evidencia fechada de una instalación real sobre un clone nuevo
+- Evidencia fechada de una instalación real sobre un clone nuevo (hoy en `docs/EVIDENCE.md`)
   del repo público, desde un home vacío y sin credencial de OpenCode Zen (install exit 0,
   verify con todos los checks en verde o `skip`, `npm test` verde).
 

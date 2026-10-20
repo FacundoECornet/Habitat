@@ -195,9 +195,8 @@ Ver [`docs/CAPTURE.md`](docs/CAPTURE.md).
 Etapa 1 cerrada: restore, verificación, captura, GSD, skills y plugins funcionan en Windows,
 Linux, macOS y WSL. Lo que sigue está en el [CHANGELOG](CHANGELOG.md) y en los issues abiertos.
 
-Evidencia de instalación sobre un clone nuevo del repo público, sin credenciales:
-[`docs/EVIDENCE-LINUX.md`](docs/EVIDENCE-LINUX.md) (Linux/WSL) y
-[`docs/EVIDENCE-WINDOWS.md`](docs/EVIDENCE-WINDOWS.md) (Windows nativo, PowerShell).
+Evidencia de instalación sobre un clone nuevo del repo público, sin credenciales, en Linux/WSL
+y en Windows nativo: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).
 
 ## Licencia y contribución
 
