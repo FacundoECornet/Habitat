@@ -107,13 +107,14 @@ node tools/verify.mjs
 | Check | Qué garantiza |
 |---|---|
 | `manifest-dests` | Todo destino del manifiesto existe. |
+| `portable-paths` | No quedan placeholders ni rutas de otra máquina (POSIX, Windows o WSL). |
 | `mcp-json` | La config de MCP parsea y cada servidor está declarado como local. |
-| `cli-tools` | `gsd-sdk` y `graphify` responden. |
+| `jev-mcp` | El MCP de JEV responde — o queda en `skip` si no hay credencial de OpenCode Zen. |
+| `cli-tools` | `gsd-sdk` y `graphify` responden; si no están instalados, se informa en verde. |
 | `plugins` | Cada plugin declarado (local o npm) resuelve. |
 | `discovery` | Skills y agentes son descubribles y no están duplicados. |
+| `archify` | La skill de Archify viene completa y su doctor responde. |
 | `model-ids` | Cada modelo configurado existe en el catálogo de OpenCode. |
-| `portable-paths` | No quedan placeholders ni rutas de otra máquina. |
-| `jev-mcp` | El MCP de JEV responde — o queda en `skip` si no hay credencial de OpenCode Zen. |
 
 Un check en `skip` no hace fallar la instalación; un check que falla siempre trae un hint
 accionable.
@@ -189,16 +190,22 @@ Graphify es opcional y requiere Python 3. Sin Python, el resto de Habitat sigue 
 ## Mantener tu propio snapshot
 
 `scripts/capture.sh` relee tu entorno y actualiza el payload del repo. Es re-ejecutable,
-soporta `--dry-run` y nunca commitea secretos ni junk. Requisitos: Bash, `rsync` y coreutils
+soporta `--dry-run` y nunca commitea secretos ni junk. Requisitos: Bash y `rsync`
 (en Windows: usá WSL para capturar).
+
+El instalador deja activo el **gate de secretos** en el repo desde el que instalaste
+(`core.hooksPath=.githooks`, solo configuración local de ese repo): un commit que lleve una
+credencial se bloquea con la regla nombrada. Si ya tenías tu propio `core.hooksPath`, no se toca.
 
 Ver [`docs/CAPTURE.md`](docs/CAPTURE.md).
 
 ## Estado del proyecto
 
 Etapa 1 cerrada: restore, verificación, captura, GSD, skills y plugins funcionan en Windows,
-Linux, macOS y WSL. Las tres plataformas corren en CI, con los tests y un smoke de
-instalación sobre un home limpio.
+Linux, macOS y WSL. Las tres plataformas corren en CI, con los tests, los gates del repo y un
+smoke de instalación sobre un home limpio. Un job semanal revisa el catálogo de modelos de
+OpenCode y avisa (con un issue) cuando se retira un ID, antes de que le rompa la instalación a
+alguien.
 
 Lo que sigue está en el [CHANGELOG](CHANGELOG.md).
 

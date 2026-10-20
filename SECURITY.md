@@ -38,6 +38,11 @@ En el repo solo hay **plantillas** (`*.example`) para lo que necesita un valor r
 Los patrones se arman por fragmentos para que el propio detector no se auto-dispare. El hook
 reporta **regla, ruta y línea**, nunca el valor detectado.
 
+El instalador lo activa solo en el repo desde el que se instala (`core.hooksPath=.githooks`,
+configuración **local** de ese repo): la config global de Git no se toca, así que ningún otro
+repositorio del usuario se ve afectado, y un `core.hooksPath` que el usuario haya configurado
+por su cuenta no se pisa.
+
 **Importante:** este gate es una red de seguridad del flujo de trabajo, **no** una frontera de
 seguridad. `git commit --no-verify` lo desactiva, y un valor disfrazado puede pasar. La
 responsabilidad de no filtrar secretos es de quien commitea.
@@ -53,15 +58,42 @@ Además del hook local, el repo tiene esta capa activa en GitHub:
 | **Dependabot security updates** | Abre PRs automáticos con las actualizaciones de seguridad de las dependencias declaradas. |
 | **Ruleset de ramas** (todas) | Ninguna rama se puede borrar ni reescribir por force-push; la historia es lineal. |
 | **Ruleset de tags** | Los tags publicados no se pueden borrar ni reescribir: cada release apunta a un commit inmutable. |
-| **Protección de `master`** | Un push a `master` exige que el check `CI` esté verde; no hay force-push ni borrado de rama. |
+| **Protección de `master`** | Un push a `master` exige que estén verdes los checks de las tres plataformas (`Node 22.22.2`, `Node 24`, `Node 26`, `Windows`, `macOS`); no hay force-push ni borrado de rama. |
 | **Merges squash + sign-off** | Cada PR entra como un commit, con el mensaje firmado. |
 | **CI pineado** | Las actions del workflow están fijadas por SHA y el pipeline corre `npm audit` sobre los dos lockfiles. |
 | **Run semanal** | El pipeline también corre por cron: detecta roturas de upstream (una release nueva de GSD, un modelo que sale del catálogo) sin esperar un push. |
+| **Job del catálogo de modelos** | Una vez por semana compara el payload contra el catálogo de OpenCode y abre (o actualiza) un issue con la lista exacta de agentes y perfiles afectados. |
 
 Dos cosas que GitHub no habilita en este repo (y no están bajo control del proyecto):
 los **patrones de secret scanning propios** (requieren un plan que este repo no tiene; el
 archivo `.github/secret-scanning.yml` queda por si se habilita) y la regla de **restringir
 rutas de archivo sensibles** en los rulesets.
+
+## El secreto del job de catálogo
+
+El job semanal del catálogo necesita la credencial de OpenCode para ver el catálogo **completo**
+(sin ella, el listado público es un subconjunto que todavía anuncia modelos ya retirados, así
+que no podría detectarlos). La credencial vive en un **secreto del repositorio**
+(`OPENCODE_AUTH`), que GitHub guarda cifrado:
+
+- nunca está en el repo, ni en un commit, ni en un tag, ni en el historial;
+- el job solo corre por cron o por disparo manual: los `pull_request` **no** reciben secretos,
+  así que una PR de un fork no puede leerlo;
+- el runner es una máquina efímera nueva en cada corrida, y el archivo de credenciales se
+  borra con ella;
+- GitHub enmascara el valor en los logs (aparece como `***`).
+
+La credencial solo se usa para una **consulta de lectura** del catálogo (`opencode models`).
+Si llegara a filtrarse, la rotación es: cambiarla en OpenCode Zen y volver a cargar el secreto
+(`gh secret set OPENCODE_AUTH < archivo`).
+
+## Qué se verificó
+
+El árbol publicado, el historial completo (1.894 blobs), los tags, las notas de las releases y
+las superficies públicas de GitHub se revisaron buscando: las tres claves de OpenCode de la
+máquina del maintainer, el nombre de usuario local, la ruta del home, el nombre del equipo y el
+email personal. Resultado: **0 coincidencias** en todo lo publicado. Lo único que aparece es el
+email `noreply` de GitHub, que es un alias público por diseño y va en la autoría de cada commit.
 
 ## Alcance
 

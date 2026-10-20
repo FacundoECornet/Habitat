@@ -16,7 +16,9 @@ npm install        # el repo no tiene dependencias de runtime; npm test alcanza
 npm test
 ```
 
-La suite corre en Node puro: `tests/` se ejecuta con `node --test` y no necesita red.
+La suite corre en Node puro: `tests/` se ejecuta con `node --test` y no necesita red. Son 81
+casos: el motor de restore, la captura, el scanner de rutas, el check de IDs de modelo, el
+contrato del manifiesto, el instalador, las verificaciones y el workflow de release.
 Dos checks necesitan el paquete MCP del payload (`home/.config/opencode`): hasta que corras
 `npm ci --prefix home/.config/opencode`, esos tests se **omiten** (skip) en vez de fallar.
 
@@ -33,7 +35,9 @@ node tools/verify.mjs --home /tmp/habitat-sandbox --repo "$PWD" --no-models --no
 ## El hook de secretos
 
 El hook de pre-commit escanea el índice (no el working tree) en busca de credenciales y bloquea
-el commit si encuentra una. Se activa por repo:
+el commit si encuentra una. **El instalador lo activa solo** en el repo desde el que instalaste
+(`core.hooksPath=.githooks`, configuración local de ese repo; la global de Git no se toca). Si
+preferís activarlo a mano, o si el repo no es un work tree de Git:
 
 ```bash
 git config --local core.hooksPath=.githooks
