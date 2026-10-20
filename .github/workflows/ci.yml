@@ -5,6 +5,11 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  schedule:
+    # Weekly: catches upstream breakage (a new GSD release, a model that left
+    # the catalog, a changed lockfile) without waiting for the next push.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,10 +24,10 @@ jobs:
         node: ['22.22.2', '24', '26']
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node }}
 
@@ -30,6 +35,11 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm ci --prefix home/.config/opencode --no-audit --no-fund
+
+      - name: Audit dependencies
+        run: |
+          npm audit --audit-level=high
+          npm audit --prefix home/.config/opencode --audit-level=high
 
       - name: Tests
         run: npm test
@@ -39,6 +49,16 @@ jobs:
 
       - name: Path leak scan
         run: bash scripts/check-path-leaks.sh
+
+      - name: Payload has no symlinks
+        run: |
+          symlinks=$(git ls-files -s home | awk '$1 == "120000" { print $4 }')
+          if [ -n "$symlinks" ]; then
+            echo "::error::the payload ships symlinks; they are never followed, but they must not ship"
+            echo "$symlinks"
+            exit 1
+          fi
+          echo "no symlinks in the payload"
 
       - name: Hook syntax
         run: bash -n .githooks/pre-commit

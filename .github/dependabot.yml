@@ -1,5 +1,6 @@
 version: 2
 updates:
+  # The payload lockfile: the MCP package and the OpenCode plugin SDK.
   - package-ecosystem: npm
     directory: /home/.config/opencode
     schedule:
@@ -10,3 +11,26 @@ updates:
       - dependencies
     commit-message:
       prefix: "chore(deps)"
+    # Dependabot runs `npm ci` to compute the update; scripts are not needed
+    # for that, and not running them keeps the update pipeline from executing
+    # third-party install scripts.
+    insecure-external-code-execution: deny
+    groups:
+      mcp-and-plugin:
+        patterns:
+          - "@jkudish/*"
+          - "@opencode-ai/*"
+
+  # The root lockfile: only the MCP package, declared so GitHub can build the
+  # dependency graph.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(deps)"
+    insecure-external-code-execution: deny
