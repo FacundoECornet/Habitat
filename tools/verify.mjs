@@ -19,6 +19,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { PROFILE_NAMES, loadOverlay, mergeOverlay } from "../lib/model-pick.mjs";
 import { openCodeZenApiKey } from "../lib/opencode-auth.mjs";
+import { findExecutable } from "../lib/exec-path.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -258,23 +259,23 @@ function checkJevMcp(home) {
 // opencode.ps1 is unusable without changing ExecutionPolicy. Prefer an explicit
 // .exe/.cmd/.bat on PATH and never hand a .ps1 to spawn.
 function resolveExecutable(command) {
-  if (process.platform !== "win32") return command;
-  if (command.includes("/") || command.includes("\\")) return command;
-  for (const dir of (process.env.PATH || "").split(path.delimiter)) {
-    if (!dir) continue;
-    for (const ext of [".exe", ".cmd", ".bat"]) {
-      const candidate = path.join(dir, command + ext);
-      try {
-        if (fs.statSync(candidate).isFile()) return candidate;
-      } catch { /* keep looking */ }
-    }
-  }
-  return command;
+  return findExecutable(command);
 }
 
 function runTool(command, args, timeoutMs) {
   const win = process.platform === "win32";
   const resolved = resolveExecutable(command);
+  // A missing binary must surface as ENOENT even on win32, where the spawn
+  // goes through cmd.exe and would otherwise look like a command that ran and
+  // failed. Otherwise "not installed" is reported as "broken".
+  if (win && !resolved) {
+    return {
+      status: null,
+      stdout: "",
+      stderr: "",
+      error: { code: "ENOENT", message: `${command} no está en PATH` },
+    };
+  }
   const result = spawnSync(win ? `"${resolved}"` : resolved, args, {
     encoding: "utf8",
     timeout: timeoutMs,

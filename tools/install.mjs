@@ -701,8 +701,14 @@ function copyBin(options) {
 }
 
 function copySupportModules(options) {
-  const names = ["model-pick.mjs", "opencode-auth.mjs"];
   const sourceDir = path.join(options.repo, "lib");
+  // Every module of lib/ travels with the installed bins: the tools in ~/bin
+  // import them as ../lib/<name>. Copying only a hand-picked list used to
+  // leave ~/bin/restore broken (missing lib/manifest.mjs).
+  const names = fs
+    .readdirSync(sourceDir)
+    .filter((name) => name.endsWith(".mjs"))
+    .sort();
   const targetDir = path.join(options.home, "lib");
   if (options.dryRun) {
     for (const name of names) log("bin", `dry-run: se copiaría módulo de soporte a ${path.join(targetDir, name)}`);
