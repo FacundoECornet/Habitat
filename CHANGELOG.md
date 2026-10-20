@@ -4,7 +4,7 @@ Todas las novedades de Habitat se registran acá, siguiendo
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 [Versionado Semántico](https://semver.org/lang/es/).
 
-## [Unreleased]
+## [0.2.1] - 2026-10-20
 
 ### Agregado
 
@@ -13,6 +13,19 @@ Todas las novedades de Habitat se registran acá, siguiendo
   ya (los tags son inmutables), que el CHANGELOG tenga la sección de esa versión y que la CI
   de `master` esté en verde sobre ese commit. Las notas salen del CHANGELOG. Nunca se
   publica solo.
+
+### Corregido
+
+- El check `cli-tools` decía "responden (no instalados: gsd-sdk, graphify)", que se
+  contradecía: ahora dice "ok, pero no instaladas: ...".
+
+### Documentación
+
+- La evidencia de macOS ahora detalla qué corre la CI (un macOS real de Apple Silicon, con
+  las herramientas BSD de verdad) y, con honestidad, qué no cubre: la corrida es automática,
+  con home temporal y sin credenciales; la evidencia humana sigue siendo de Linux/WSL y
+  Windows nativo.
+- `CONTRIBUTING.md` documenta cómo publicar una versión.
 
 ## [0.2.0] - 2026-10-20
 
@@ -208,6 +221,7 @@ interno.
 git clone https://github.com/FacundoECornet/Habitat.git ~/code/habitat
 ```
 
+[0.2.1]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.2.1
 [0.2.0]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.2.0
 [0.1.6]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.1.6
 [0.1.5]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.1.5
