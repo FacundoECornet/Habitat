@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generated": "2026-10-19T18:14:05Z",
+  "generated": "2026-10-20T17:30:00Z",
   "entries": [
     {
       "origin": ".config/opencode",
@@ -103,6 +103,7 @@
         "*.zip",
         "*.bak*",
         "*.backup-*",
+        "backup-*",
         "opencode-backup/",
         "opencode-backup-*.tar.gz",
         "agents.bak-*",

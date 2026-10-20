@@ -225,10 +225,13 @@ remote_preflight
 file_size() { wc -c < "$1" 2>/dev/null | tr -d '[:space:]'; }
 
 # Compares a manifest-filtered source snapshot against the destination tree by
-# relative path, content checksum, and executable bit. Prints
-# "<added> <changed> <removed> <signed-delta-bytes>"
+# relative path, content checksum, and executable bit. The manifest excludes
+# apply to both sides: a file the manifest leaves out is not payload, so it is
+# not drift either (the destination may hold the local `node_modules/` of a
+# developer checkout, and that is not something the capture would publish).
+# Prints "<added> <changed> <removed> <signed-delta-bytes>"
 account_dir() {
-  node - "$1" "$2" <<'NODE'
+  node - "$1" "$2" "$3" <<'NODE'
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -236,8 +239,51 @@ const crypto = require('crypto');
 
 const stageRoot = process.argv[2];
 const dstRoot = process.argv[3];
+const excludeFile = process.argv[4];
 
-function walk(root) {
+// Same matching rules as the restore engine: a pattern without a slash
+// matches any path component, and a trailing slash means "directories only".
+const patterns = [];
+try {
+  for (const line of fs.readFileSync(excludeFile, 'utf8').split('\n')) {
+    if (line) patterns.push(line);
+  }
+} catch (err) { /* no excludes */ }
+
+function globToRegExp(pat) {
+  let re = '^';
+  for (const c of pat) {
+    if (c === '*') re += '.*';
+    else if (c === '?') re += '.';
+    else re += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(re + '$');
+}
+
+const regexes = patterns.map((pat) => ({
+  dirOnly: pat.endsWith('/'),
+  rx: globToRegExp(pat.endsWith('/') ? pat.slice(0, -1) : pat),
+}));
+
+function isExcluded(rel) {
+  const comps = rel.split('/');
+  for (const { dirOnly, rx } of regexes) {
+    for (const comp of comps) {
+      if (!rx.test(comp)) continue;
+      if (dirOnly) {
+        // A directory-only pattern only matches a directory.
+        let isDir = false;
+        try { isDir = fs.lstatSync(path.join(dstRoot, rel)).isDirectory(); } catch (err) { isDir = false; }
+        if (isDir) return true;
+        continue;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+function walk(root, applyExcludes) {
   const map = new Map();
   let st;
   try { st = fs.lstatSync(root); } catch (err) { return map; }
@@ -252,6 +298,7 @@ function walk(root) {
     for (const d of ents) {
       const r = rel ? rel + '/' + d.name : d.name;
       const a = path.join(abs, d.name);
+      if (applyExcludes && isExcluded(r)) continue;
       let s;
       try { s = fs.lstatSync(a); } catch (err) { continue; }
       if (s.isSymbolicLink()) continue;
@@ -266,8 +313,8 @@ function walk(root) {
   return map;
 }
 
-const src = walk(stageRoot);
-const dst = walk(dstRoot);
+const src = walk(stageRoot, false);
+const dst = walk(dstRoot, true);
 let added = 0;
 let changed = 0;
 let removed = 0;
@@ -377,54 +424,51 @@ if [ "$DRY_RUN" -eq 1 ]; then
     changed=0
     removed=0
     delta=0
-    # rsync writes informational notes (e.g. "skipping non-regular file") to
-    # stdout alongside the itemize listing. Drift is decided only by real itemize
-    # event lines, whose two leading status characters match [<>ch.*][fdLDS].
-    has_itemize=0
-    if grep -qE '^[<>ch.*][fdLDS]' "$itemize" 2>/dev/null; then
-      has_itemize=1
-    fi
-
-    if [ "$has_itemize" -eq 1 ]; then
-      if [ "$type" = "file" ]; then
-        if [ ! -e "$dst" ]; then
-          added=1
-          delta="$(file_size "$src")"
-        elif cmp -s "$src" "$dst"; then
-          if [ -x "$src" ] && [ ! -x "$dst" ] || [ ! -x "$src" ] && [ -x "$dst" ]; then
-            changed=1
-          fi
-        else
+    # The drift verdict comes from this engine's own accounting (content
+    # checksum plus executable bit), never from parsing rsync's itemized
+    # output: the itemize format differs between rsync 2.6.9 (macOS) and 3.x
+    # (Linux), and the older one reports a time difference on a converged
+    # tree, which would make the preview claim a drift that is not there.
+    # The itemize listing is kept for display, minus the attribute-only lines
+    # (a different mtime is not a change of content).
+    if [ "$type" = "file" ]; then
+      if [ ! -e "$dst" ]; then
+        added=1
+        delta="$(file_size "$src")"
+      elif cmp -s "$src" "$dst"; then
+        if [ -x "$src" ] && [ ! -x "$dst" ] || [ ! -x "$src" ] && [ -x "$dst" ]; then
           changed=1
-          delta=$(( $(file_size "$src") - $(file_size "$dst") ))
         fi
       else
-        stage="$work/stage.$idx"
-        rm -rf "$stage"
-        mkdir -p "$stage"
-        if ! rsync -r -p --no-links --exclude-from="$exf" "$src/" "$stage/" 2>/dev/null; then
-          printf 'capture: stage-failed (%s)\n' "$dest" >&2
-          exit 2
-        fi
-        vals="$(account_dir "$stage" "$dst")" || {
-          printf 'capture: account-failed (%s)\n' "$dest" >&2
-          exit 2
-        }
-        if [ -z "$vals" ]; then
-          printf 'capture: account-failed (%s)\n' "$dest" >&2
-          exit 2
-        fi
-        read -r added changed removed delta <<< "$vals"
+        changed=1
+        delta=$(( $(file_size "$src") - $(file_size "$dst") ))
       fi
+    else
+      stage="$work/stage.$idx"
+      rm -rf "$stage"
+      mkdir -p "$stage"
+      if ! rsync -r -p --no-links --exclude-from="$exf" "$src/" "$stage/" 2>/dev/null; then
+        printf 'capture: stage-failed (%s)\n' "$dest" >&2
+        exit 2
+      fi
+      vals="$(account_dir "$stage" "$dst" "$exf")" || {
+        printf 'capture: account-failed (%s)\n' "$dest" >&2
+        exit 2
+      }
+      if [ -z "$vals" ]; then
+        printf 'capture: account-failed (%s)\n' "$dest" >&2
+        exit 2
+      fi
+      read -r added changed removed delta <<< "$vals"
     fi
 
     printf '[entry %s -> %s]\n' "$origin" "$dest"
     printf 'added=%s changed=%s removed=%s delta=%s\n' "$added" "$changed" "$removed" "$delta"
     if [ -s "$itemize" ]; then
-      sed 's/^/  /' "$itemize"
+      grep -E '^[<>c*]' "$itemize" 2>/dev/null | sed 's/^/  /'
     fi
 
-    if [ "$has_itemize" -eq 1 ] || [ "$added" -ne 0 ] || [ "$changed" -ne 0 ] || [ "$removed" -ne 0 ]; then
+    if [ "$added" -ne 0 ] || [ "$changed" -ne 0 ] || [ "$removed" -ne 0 ]; then
       overall_drift=1
     fi
   done
