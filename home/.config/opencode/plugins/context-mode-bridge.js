@@ -18,7 +18,7 @@
 // whether the MCP server came up. `tools/verify.mjs` reads it, and it is
 // also the first thing to look at when the `ctx_*` tools are missing.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -27,6 +27,14 @@ const REPORT_NAME = ".habitat-context-mode.json";
 
 function configDir() {
   return join(homedir(), ".config", "opencode");
+}
+
+function readReport() {
+  try {
+    return JSON.parse(fs.readFileSync(join(configDir(), REPORT_NAME), "utf8"));
+  } catch (error) {
+    return {};
+  }
 }
 
 function writeReport(payload) {
@@ -73,6 +81,24 @@ async function setupV2(ctx) {
     });
   } catch (error) {
     writeReport({ route: "mcp", ok: false, error: String(error?.message ?? error) });
+  }
+
+  // The session context carries the tools the model actually receives: that
+  // is the proof that the `ctx_*` tools are exposed, not only that the server
+  // is up. Recorded once, on the first request.
+  if (typeof ctx.session?.hook === "function") {
+    let recorded = false;
+    try {
+      await ctx.session.hook("context", async (input) => {
+        if (recorded || !input || typeof input.tools !== "object") return;
+        const names = Object.keys(input.tools).filter((name) => name.startsWith("ctx_"));
+        if (names.length === 0) return;
+        recorded = true;
+        writeReport({ ...readReport(), tools: names.sort() });
+      });
+    } catch (error) {
+      // A diagnostic hook must never break a request.
+    }
   }
 }
 

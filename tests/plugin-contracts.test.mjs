@@ -232,6 +232,42 @@ test("plugin puente: si el MCP no levanta, el reporte lo dice", async (t) => {
   assert.equal(parsed.error, "boom");
 });
 
+test("plugin puente: el contexto de sesion deja ver las herramientas ctx_*", async (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-bridge-"));
+  const previousHome = process.env.HOME;
+  process.env.HOME = home;
+  t.after(() => {
+    process.env.HOME = previousHome;
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  const mod = await import(`${bridgePath}?tools=${home}`);
+  const { ctx } = v2McpContext();
+  const sessionHooks = [];
+  ctx.session = {
+    hook: async (name, callback) => {
+      sessionHooks.push({ name, callback });
+      return { dispose: async () => {} };
+    },
+  };
+  await mod.default.setup(ctx);
+
+  const contextHook = sessionHooks.find((h) => h.name === "context");
+  assert.ok(contextHook, "el puente escucha el contexto de la sesion");
+
+  await contextHook.callback({
+    tools: {
+      ctx_stats: { description: "stats" },
+      ctx_execute: { description: "execute" },
+      bash: { description: "shell" },
+    },
+  });
+
+  const report = path.join(home, ".config", "opencode", ".habitat-context-mode.json");
+  const parsed = JSON.parse(fs.readFileSync(report, "utf8"));
+  assert.deepEqual(parsed.tools, ["ctx_execute", "ctx_stats"], "solo las herramientas ctx_* se anotan");
+});
+
 test("plugin graphify: sin grafo no toca el comando", async (t) => {
   const mod = await import(graphifyPath);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-graphify-"));

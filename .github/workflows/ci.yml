@@ -161,6 +161,124 @@ jobs:
           node tools/install.mjs --home "$test_home" --repo . --no-pick-models
           node tools/verify.mjs --home "$test_home" --repo . --no-models --no-cli
 
+  # The plugin contract changed between OpenCode 1.x and 2.x, and the two lines
+  # are installed by different channels (npm keeps 1.x, Homebrew already
+  # tracks 2.x). This job runs the payload against both: on 1.x the native
+  # context-mode plugin provides the tools, on 2.x the bridge plugin registers
+  # context-mode's MCP server. The probe reads the report the bridge writes,
+  # which carries the tools the model actually received.
+  plugin-compat:
+    name: OpenCode ${{ matrix.cli }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cli: '1.19.3'
+            source: npm
+          - cli: '2.1.0'
+            source: brew
+    env:
+      OPENCODE_AUTH: ${{ secrets.OPENCODE_AUTH }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix home/.config/opencode --no-audit --no-fund
+
+      - name: Install the OpenCode CLI
+        run: |
+          if [ "${{ matrix.source }}" = "npm" ]; then
+            npm install -g opencode-ai@${{ matrix.cli }}
+          else
+            brew install opencode
+          fi
+          opencode --version
+
+      - name: Install the payload into a sandbox home
+        run: |
+          export SANDBOX_HOME="$RUNNER_TEMP/habitat-home"
+          export XDG_DATA_HOME="$RUNNER_TEMP/habitat-data"
+          mkdir -p "$SANDBOX_HOME" "$XDG_DATA_HOME/opencode"
+          if [ -n "$OPENCODE_AUTH" ]; then
+            printf '%s' "$OPENCODE_AUTH" > "$XDG_DATA_HOME/opencode/auth.json"
+            chmod 600 "$XDG_DATA_HOME/opencode/auth.json"
+          fi
+          node tools/install.mjs --home "$SANDBOX_HOME" --repo . --no-pick-models
+
+      - name: Check the config adapted to this line
+        run: |
+          export HOME="$RUNNER_TEMP/habitat-home"
+          config="$HOME/.config/opencode/opencode.jsonc"
+          version="$(opencode --version)"
+          echo "OpenCode: $version"
+          if [ "${{ matrix.source }}" = "npm" ]; then
+            # 1.x: the native plugin stays and provides the tools.
+            grep -q '"context-mode"' "$config" || {
+              echo "::error::en la línea 1.x el plugin nativo de context-mode tiene que seguir declarado"
+              exit 1
+            }
+            echo "ok: el plugin nativo sigue declarado"
+          else
+            # 2.x: the native plugin cannot load, the bridge registers the MCP.
+            if grep -q '"context-mode"' "$config"; then
+              echo "::error::en la línea 2.x el plugin nativo de context-mode no carga: el instalador tenía que sacarlo"
+              exit 1
+            fi
+            grep -q 'context-mode-bridge' "$config" || {
+              echo "::error::falta el plugin puente de context-mode"
+              exit 1
+            }
+            echo "ok: el puente quedó declarado y el nativo fuera"
+          fi
+
+      - name: Check the ctx_* tools are exposed
+        run: |
+          export HOME="$RUNNER_TEMP/habitat-home"
+          export XDG_DATA_HOME="$RUNNER_TEMP/habitat-data"
+          if [ "${{ matrix.source }}" = "npm" ]; then
+            # The native plugin registers its tools when the CLI loads: the
+            # agent config lists them.
+            count="$(opencode debug agent build | grep -c 'ctx_' || true)"
+            echo "herramientas ctx_* declaradas: $count"
+            if [ "$count" -lt 11 ]; then
+              echo "::error::la línea 1.x debería exponer las 11 herramientas ctx_* (encontradas: $count)"
+              exit 1
+            fi
+            echo "ok: las herramientas ctx_* están expuestas"
+          else
+            # On 2.x the bridge registers the MCP server at runtime, so the
+            # proof is the report it writes during a session.
+            if [ -z "$OPENCODE_AUTH" ]; then
+              echo "::warning::sin el secreto OPENCODE_AUTH no se puede abrir una sesión: la prueba de las herramientas ctx_* queda para el job con credenciales"
+              exit 0
+            fi
+            opencode run -m opencode/mimo-v2.6-flash-free "decí ok" || true
+            report="$HOME/.config/opencode/.habitat-context-mode.json"
+            if [ ! -f "$report" ]; then
+              echo "::error::el puente no dejó reporte: los plugins no cargaron"
+              exit 1
+            fi
+            cat "$report"
+            node -e '
+              const fs = require("fs");
+              const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              if (report.route !== "mcp") throw new Error("la ruta no es mcp: " + report.route);
+              if (report.ok !== true) throw new Error("el servidor MCP no conectó: " + JSON.stringify(report));
+              const tools = report.tools || [];
+              if (tools.length < 11) throw new Error("faltan herramientas ctx_*: " + tools.length);
+              console.log("ok: " + tools.length + " herramientas ctx_* disponibles");
+            ' "$report"
+          fi
+
   # OpenCode retires model ids over time. When that happens the install of
   # every user fails, so the catalog is checked weekly and an issue is opened
   # with the exact list of affected agents and profiles.
