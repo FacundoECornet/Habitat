@@ -9,6 +9,7 @@ import {
   openCodeZenApiKey,
   withSystemCa,
 } from "../lib/opencode-auth.mjs";
+import { MCP_MISSING_HINT, mcpPackageInstalled, payloadConfigDir } from "./helpers/mcp-deps.mjs";
 
 function temporaryDataHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "habitat-auth-test-"));
@@ -42,9 +43,12 @@ test("returns null when OpenCode Zen credential is absent", (t) => {
   assert.equal(openCodeZenApiKey({ home: os.tmpdir(), env: { XDG_DATA_HOME: dataHome } }), null);
 });
 
-test("resolves executable MCP entrypoint from the installed package", () => {
-  const configDir = path.resolve("home", ".config", "opencode");
-  assert.equal(path.basename(jevMcpEntry(configDir)), "index.js");
+test("resolves executable MCP entrypoint from the installed package", (t) => {
+  if (!mcpPackageInstalled()) {
+    t.skip(MCP_MISSING_HINT);
+    return;
+  }
+  assert.equal(path.basename(jevMcpEntry(payloadConfigDir)), "index.js");
 });
 
 test("adds Windows system CA without overriding existing Node options", () => {

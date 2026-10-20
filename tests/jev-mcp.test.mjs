@@ -6,12 +6,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { openCodeAuthPath } from "../lib/opencode-auth.mjs";
+import { MCP_MISSING_HINT, mcpPackageInstalled } from "./helpers/mcp-deps.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const launcher = path.join(root, "tools", "jev-mcp.mjs");
 const configHome = path.join(root, "home", ".config");
 
 test("JEV launcher initializes MCP and advertises jev_classify", async (t) => {
+  if (!mcpPackageInstalled()) {
+    t.skip(MCP_MISSING_HINT);
+    return;
+  }
   const dataHome = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-jev-mcp-test-"));
   t.after(() => fs.rmSync(dataHome, { recursive: true, force: true }));
 

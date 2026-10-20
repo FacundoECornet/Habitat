@@ -17,6 +17,12 @@ npm test
 ```
 
 La suite corre en Node puro: `tests/` se ejecuta con `node --test` y no necesita red.
+Dos checks necesitan el paquete MCP del payload (`home/.config/opencode`): hasta que corras
+`npm ci --prefix home/.config/opencode`, esos tests se **omiten** (skip) en vez de fallar.
+
+```bash
+npm ci --prefix home/.config/opencode   # instala el MCP del payload
+```
 
 Para verificar una instalación real sin tocar tu home, usá un sandbox:
 
