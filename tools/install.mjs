@@ -290,6 +290,50 @@ function rememberRepo(options) {
   }
 }
 
+// --- activate the versioned secret gate in the repo being installed from ----
+// The pre-commit hook blocks a commit that carries a credential. It lives in
+// this repository, so it is activated in this repository, and only there:
+// repository-local config, never the global one, so no other repository of the
+// user is affected. A hook path the user configured themselves is never
+// overwritten.
+function activateRepoHooks(options) {
+  const repo = path.resolve(options.repo);
+  const hook = path.join(repo, ".githooks", "pre-commit");
+  if (!fs.existsSync(hook)) {
+    log("hooks", "el repo no tiene .githooks/pre-commit; se omite");
+    return true;
+  }
+  const top = run("git", ["-C", repo, "rev-parse", "--show-toplevel"], { capture: true });
+  if (top.status !== 0 || !(top.stdout || "").trim()) {
+    warn("el repo no es un work tree de Git; el gate de secretos no se activa (es opcional)");
+    return true;
+  }
+  const current = run("git", ["-C", repo, "config", "--local", "--get", "core.hooksPath"], {
+    capture: true,
+  });
+  const configured = (current.stdout || "").trim();
+  if (configured && configured !== ".githooks") {
+    log("hooks", `core.hooksPath ya apunta a '${configured}': no se toca (es tu decisión)`);
+    return true;
+  }
+  if (!IS_WIN) {
+    try {
+      fs.chmodSync(hook, 0o755);
+    } catch (error) {
+      warn(`no se pudo marcar el hook como ejecutable: ${error.message}`);
+    }
+  }
+  const set = run("git", ["-C", repo, "config", "--local", "core.hooksPath", ".githooks"], {
+    capture: true,
+  });
+  if (set.status !== 0) {
+    warn("no se pudo activar el gate de secretos (core.hooksPath): es opcional");
+    return true;
+  }
+  log("hooks", "gate de secretos activo en este repo (core.hooksPath=.githooks, solo local)");
+  return true;
+}
+
 function sha256(text) {
   return crypto.createHash("sha256").update(text, "utf8").digest("hex");
 }
@@ -930,6 +974,8 @@ function main() {
   }
 
   if (!options.dryRun && !rememberRepo(options)) process.exit(EXIT_FAILED);
+
+  if (!options.dryRun) activateRepoHooks(options);
 
   if (!options.dryRun && !disableJevWithoutCredential(options)) process.exit(EXIT_FAILED);
 
