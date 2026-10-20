@@ -102,11 +102,12 @@ jobs:
         run: |
           # The test home lives outside the repository: restoring the payload
           # over the checkout itself would copy the tree onto itself.
-          $home = Join-Path $env:RUNNER_TEMP 'habitat-home'
-          New-Item -ItemType Directory -Force $home | Out-Null
-          node tools/install.mjs --home $home --repo . --no-pick-models
+          # ($HOME is a read-only variable in PowerShell, hence $testHome.)
+          $testHome = Join-Path $env:RUNNER_TEMP 'habitat-home'
+          New-Item -ItemType Directory -Force $testHome | Out-Null
+          node tools/install.mjs --home $testHome --repo . --no-pick-models
           if ($LASTEXITCODE -ne 0) { throw "install failed with $LASTEXITCODE" }
-          node tools/verify.mjs --home $home --repo . --no-models --no-cli
+          node tools/verify.mjs --home $testHome --repo . --no-models --no-cli
           if ($LASTEXITCODE -ne 0) { throw "verify failed with $LASTEXITCODE" }
 
   # macOS is advertised in the README, so it is proved here and not assumed:
@@ -155,10 +156,10 @@ jobs:
         run: |
           # The test home lives outside the repository: restoring the payload
           # over the checkout itself would copy the tree onto itself.
-          home="$RUNNER_TEMP/habitat-home"
-          mkdir -p "$home"
-          node tools/install.mjs --home "$home" --repo . --no-pick-models
-          node tools/verify.mjs --home "$home" --repo . --no-models --no-cli
+          test_home="$RUNNER_TEMP/habitat-home"
+          mkdir -p "$test_home"
+          node tools/install.mjs --home "$test_home" --repo . --no-pick-models
+          node tools/verify.mjs --home "$test_home" --repo . --no-models --no-cli
 
   # OpenCode retires model ids over time. When that happens the install of
   # every user fails, so the catalog is checked weekly and an issue is opened
