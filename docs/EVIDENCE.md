@@ -83,14 +83,44 @@ sobre un home temporal **fuera** del repositorio.
 
 - **Fecha:** 2026-10-20 · **Commit:** `v0.2.0` · **Workflow:** `ci.yml`
 
-| Plataforma | Node | Resultado | Suite |
-|---|---|---|---|
-| Ubuntu (Linux/WSL) | 22.22.2 · 24 · 26 | 3/3 en verde | 65 tests, 0 fail |
-| macOS | 24 | en verde | 65 tests, 0 fail |
-| Windows (PowerShell) | 24 | en verde | 65 tests, 47 pass, 18 skip, 0 fail |
+| Plataforma | Runner | Node | Resultado | Suite |
+|---|---|---|---|---|
+| Ubuntu (Linux/WSL) | `ubuntu-latest` | 22.22.2 · 24 · 26 | 3/3 en verde | 72 tests, 0 fail |
+| macOS | `macos-26-arm64` | 24 | en verde | 72 tests, 0 fail, 0 skip |
+| Windows (PowerShell) | `windows-latest` | 24 | en verde | 72 tests, 47 pass, 18 skip, 0 fail |
 
 Los 18 `skip` en Windows son las suites de la herramienta Bash (`capture.sh` y el scanner de
 rutas): necesitan `rsync`, que no existe ahí. La captura en Windows se hace desde WSL.
+
+### macOS, en detalle
+
+El job de macOS corre sobre un **macOS real de Apple Silicon** (`macos-26-arm64`), no sobre
+un emulador, así que el tooling Bash se prueba con las herramientas BSD de verdad (`rsync`
+2.6.9, `stat`, `sort`, `find` de BSD). Eso es lo que destapó los problemas de portabilidad que
+se corrigieron en `v0.2.0`.
+
+```text
+restore: restoring into /Users/runner/work/_temp/habitat-home
+restore: total added=660 changed=0 skipped=0 backups=0
+restore: complete
+ok   manifest-dests: 4 destinos presentes
+ok   portable-paths: sin placeholders ni rutas /home/<usuario> ajenas
+ok   mcp-json: 1 servidores MCP parseables
+skip jev-mcp: sin credencial OpenCode Zen — JEV queda desactivado
+ok   cli-tools: ok, pero no instaladas: gsd-sdk, graphify
+ok   plugins: 3 plugins declarados (2 locales, 1 npm)
+ok   discovery: opencode/skills=8 opencode/agents=36 .claude/skills=67 .agents/skills=3
+ok   archify: CLI listo; doctor OK
+skip model-ids: no se pudo consultar `opencode models` (red/auth)
+verify: all checks passed
+```
+
+**Exit 0**, con los 72 tests en verde (incluidos los de `capture.sh` y los del scanner de
+rutas, que en macOS son los que exigen `rsync`).
+
+**Lo que esto no cubre:** la corrida de macOS es automática, con un home temporal y sin
+credenciales. Nadie hizo a mano la instalación de Habitat en una Mac propia: la evidencia
+humana de arriba es de Linux/WSL y de Windows nativo. Para macOS, la prueba es la de la CI.
 
 El job semanal del catálogo de modelos corre una vez por semana sobre el CLI de OpenCode y
 abre un issue con la lista exacta de agentes y perfiles afectados cuando un ID público se

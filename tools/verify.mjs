@@ -341,7 +341,7 @@ function checkCli() {
   check(
     "cli-tools",
     true,
-    missing.length > 0 ? `responden (no instalados: ${missing.join(", ")})` : "responden",
+    missing.length > 0 ? `ok, pero no instaladas: ${missing.join(", ")}` : "responden",
     missing.length > 0 ? "instalá las CLIs opcionales con node tools/install.mjs --with-deps" : "",
   );
 }
