@@ -181,6 +181,24 @@ function checkMcp(home, repo) {
 }
 
 function checkJevMcp(home) {
+  // JEV is opt-in: without an OpenCode Zen credential there is nothing to
+  // validate and nothing broken, so the check is skipped (never failed).
+  let apiKey;
+  try {
+    apiKey = openCodeZenApiKey({ home });
+  } catch (error) {
+    check("jev-mcp", false, error.message, "revisá el perfil de autenticación de OpenCode");
+    return;
+  }
+  if (!apiKey) {
+    skip(
+      "jev-mcp",
+      "sin credencial OpenCode Zen — JEV queda desactivado",
+      "conectá OpenCode Zen con `opencode auth login` y volvé a correr `node tools/install.mjs` para activarlo",
+    );
+    return;
+  }
+
   const configDir = path.join(home, ".config", "opencode");
   const configPath = path.join(configDir, "opencode.jsonc");
   let config;
@@ -224,18 +242,6 @@ function checkJevMcp(home) {
     );
     return;
   }
-  let apiKey;
-  try {
-    apiKey = openCodeZenApiKey({ home });
-  } catch (error) {
-    check("jev-mcp", false, error.message, "revisá el perfil de autenticación de OpenCode");
-    return;
-  }
-  if (!apiKey) {
-    check("jev-mcp", false, "falta credencial OpenCode Zen", "ejecutá opencode auth login y conecta OpenCode Zen");
-    return;
-  }
-
   const result = runTool("opencode", ["mcp", "list"], 20000);
   const output = [result.stdout, result.stderr].filter(Boolean).join("\n").replace(/\u001b\[[0-9;]*m/g, "");
   const line = output.split(/\r?\n/).find((entry) => /\bjev\b/i.test(entry));

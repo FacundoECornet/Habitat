@@ -21,10 +21,11 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { planBin, cmdShim } from "../lib/bins.mjs";
 import { mergeOverlay, readModelFile, readProfiles, repoPointerPath } from "../lib/model-pick.mjs";
 import { canonicalHome, expandHome } from "../lib/home-placeholder.mjs";
-import { isCertificateError, withSystemCaAnyPlatform } from "../lib/opencode-auth.mjs";
+import { isCertificateError, openCodeZenApiKey, withSystemCaAnyPlatform } from "../lib/opencode-auth.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -291,6 +292,142 @@ function rememberRepo(options) {
 
 function sha256(text) {
   return crypto.createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+// --- MCP opt-in helpers -----------------------------------------------------
+// The payload ships the `jev` MCP entry so a user with an OpenCode Zen
+// credential gets it working out of the box. Without that credential the entry
+// is dead weight: OpenCode starts with a broken MCP. These helpers remove it
+// from the restored copy only (the repo payload keeps it).
+
+function stripJsonComments(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|\s+)\/\/[^\n]*/g, "$1")
+    .replace(/,(\s*[}\]])/g, "$1");
+}
+
+// Index just past the end of the JSON value that starts at `start`.
+function findJsonValueEnd(text, start) {
+  const first = text[start];
+  if (first === '"') {
+    let index = start + 1;
+    while (index < text.length) {
+      if (text[index] === "\\") { index += 2; continue; }
+      if (text[index] === '"') return index + 1;
+      index += 1;
+    }
+    return -1;
+  }
+  if (first === "{" || first === "[") {
+    const stack = [];
+    for (let index = start; index < text.length; index += 1) {
+      const char = text[index];
+      if (char === '"') {
+        const end = findJsonValueEnd(text, index);
+        if (end < 0) return -1;
+        index = end - 1;
+        continue;
+      }
+      if (char === "{" || char === "[") { stack.push(char === "{" ? "}" : "]"); continue; }
+      if (char === "}" || char === "]") {
+        if (stack.pop() !== char) return -1;
+        if (stack.length === 0) return index + 1;
+      }
+    }
+    return -1;
+  }
+  const literal = /^[^\s,}\]]+/.exec(text.slice(start));
+  return literal ? start + literal[0].length : -1;
+}
+
+// Removes `mcp.<name>` from a JSONC text. Returns the original text when the
+// entry is absent; throws when no candidate removal produces a valid config
+// with the entry gone.
+function removeMcpEntry(text, name) {
+  let original;
+  try {
+    original = JSON.parse(stripJsonComments(text));
+  } catch (error) {
+    throw new Error(`config MCP ilegible: ${error.message}`);
+  }
+  if (!original?.mcp?.[name]) return { text, removed: false };
+
+  const keyPattern = new RegExp(`"${name}"\\s*:`, "g");
+  let match;
+  while ((match = keyPattern.exec(text)) !== null) {
+    const afterColon = match.index + match[0].length;
+    const whitespace = /^\s*/.exec(text.slice(afterColon))[0].length;
+    const valueStart = afterColon + whitespace;
+    const valueEnd = findJsonValueEnd(text, valueStart);
+    if (valueEnd < 0) continue;
+
+    let removeStart = match.index;
+    while (removeStart > 0 && /[ \t]/.test(text[removeStart - 1])) removeStart -= 1;
+    let previous = removeStart - 1;
+    while (previous >= 0 && /\s/.test(text[previous])) previous -= 1;
+    if (text[previous] === ",") {
+      removeStart = previous;
+      while (removeStart > 0 && /\s/.test(text[removeStart - 1])) removeStart -= 1;
+    }
+
+    let removeEnd = valueEnd;
+    let ahead = removeEnd;
+    while (ahead < text.length && /[ \t]/.test(text[ahead])) ahead += 1;
+    if (text[ahead] === ",") removeEnd = ahead + 1;
+    while (removeEnd < text.length && /[ \t]/.test(text[removeEnd])) removeEnd += 1;
+    if (text[removeEnd] === "\r" && text[removeEnd + 1] === "\n") removeEnd += 2;
+    else if (text[removeEnd] === "\n") removeEnd += 1;
+
+    const candidate = text.slice(0, removeStart) + text.slice(removeEnd);
+    let parsed;
+    try {
+      parsed = JSON.parse(stripJsonComments(candidate));
+    } catch {
+      continue;
+    }
+    if (parsed?.mcp?.[name] !== undefined) continue;
+    return { text: candidate, removed: true };
+  }
+  throw new Error(`no se pudo quitar la entrada mcp.${name}`);
+}
+
+// Without an OpenCode Zen credential the `jev` MCP cannot work: drop it from
+// the restored config so OpenCode does not start with a broken MCP server.
+function disableJevWithoutCredential(options) {
+  let apiKey = null;
+  try {
+    apiKey = openCodeZenApiKey({ home: options.home });
+  } catch (error) {
+    warn(`no se pudo leer la credencial OpenCode Zen (${error.message}); JEV queda como está`);
+    return true;
+  }
+  if (apiKey) return true;
+
+  const configDir = path.join(options.home, ".config", "opencode");
+  for (const fileName of ["opencode.jsonc", "opencode.json"]) {
+    const file = path.join(configDir, fileName);
+    if (!fs.existsSync(file)) continue;
+    let result;
+    try {
+      result = removeMcpEntry(fs.readFileSync(file, "utf8"), "jev");
+    } catch (error) {
+      fail(`no se pudo desactivar JEV en ${file}: ${error.message}`);
+      return false;
+    }
+    if (!result.removed) continue;
+    try {
+      JSON.parse(stripJsonComments(result.text));
+    } catch (error) {
+      fail(`no se pudo desactivar JEV en ${file}: config resultante ilegible (${error.message})`);
+      return false;
+    }
+    backupFile(file, options.home);
+    fs.writeFileSync(file, result.text);
+    log("jev", `JEV desactivado (sin credencial OpenCode Zen) en ${fileName}`);
+  }
+  log("jev", "para activarlo: `opencode auth login` → conectá OpenCode Zen → volvé a correr `node tools/install.mjs`");
+  return true;
 }
 
 function detectPlatform() {
@@ -729,6 +866,8 @@ function main() {
 
   if (!options.dryRun && !rememberRepo(options)) process.exit(EXIT_FAILED);
 
+  if (!options.dryRun && !disableJevWithoutCredential(options)) process.exit(EXIT_FAILED);
+
   if (options.skipVerify) {
     log("verify", "omitido");
     if (!options.dryRun) successBanner(options);
@@ -747,4 +886,8 @@ function main() {
   process.exit(EXIT_FAILED);
 }
 
-main();
+const invokedDirectly =
+  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) main();
+
+export { removeMcpEntry, disableJevWithoutCredential, stripJsonComments };

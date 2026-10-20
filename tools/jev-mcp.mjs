@@ -16,8 +16,10 @@ const apiKey = openCodeZenApiKey({ home });
 
 if (!apiKey) {
   process.stderr.write(
-    `habitat-jev-mcp: falta credencial OpenCode Zen en ${openCodeAuthPath(home)}. ` +
-      "Ejecutá `opencode auth login` y conectá OpenCode Zen.\n",
+    `habitat-jev-mcp: falta credencial OpenCode Zen en ${openCodeAuthPath(home)}.\n` +
+      "JEV es opcional: si no lo vas a usar, borrá la entrada `jev` del bloque `mcp` " +
+      "de ~/.config/opencode/opencode.jsonc y OpenCode arrancará sin este MCP.\n" +
+      "Para activarlo: `opencode auth login` y conectá OpenCode Zen.\n",
   );
   process.exit(1);
 }
