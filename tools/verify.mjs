@@ -116,7 +116,18 @@ function checkPortablePaths(home) {
   if (!fs.existsSync(root)) return;
   const forbidden = ["__HABITAT_HOME__"];
   const ownHome = path.resolve(home).replace(/\\/g, "/").toLowerCase();
-  const foreignHome = /\/home\/[A-Za-z_][^/\s"'`)]*/g;
+  // Home roots of another machine, in every spelling the payload can carry:
+  // POSIX (/home/<login>), native Windows (<drive>:/Users/<login>) and the WSL
+  // mount (/mnt/<drive>/Users/<login>). The payload is cross-platform, so all
+  // three are checked on every platform.
+  const foreignHomes = [
+    /\/home\/[A-Za-z_][^/\s"'`)]*/g,
+    // The login must start with a letter, a digit or an underscore, so a
+    // documented placeholder (C:/Users/..., C:/Users/<usuario>) is not read as
+    // somebody else's home.
+    /[A-Za-z]:[\\/]Users[\\/][A-Za-z0-9_][^\\/\s"'`.)]*/g,
+    /\/mnt\/[A-Za-z][\\/]Users[\\/][A-Za-z0-9_][^\\/\s"'`.)]*/gi,
+  ];
   const hits = [];
   // Vendor-managed copies and stale backups are not payload: they are written
   // by other tools (the GSD installer keeps a pristine copy) and never
@@ -136,12 +147,14 @@ function checkPortablePaths(home) {
       for (const token of forbidden) {
         if (text.includes(token)) hits.push(`${path.relative(home, abs)} (${token})`);
       }
-      for (const match of text.match(foreignHome) ?? []) {
-        const candidate = match.toLowerCase();
-        // The same account's home root is legitimate (the payload expands to
-        // this machine's home); any other login is a foreign absolute path.
-        if (candidate === ownHome || ownHome.startsWith(`${candidate}/`)) continue;
-        hits.push(`${path.relative(home, abs)} (${match})`);
+      for (const pattern of foreignHomes) {
+        for (const match of text.match(pattern) ?? []) {
+          const candidate = match.replace(/\\/g, "/").toLowerCase();
+          // The same account's home root is legitimate (the payload expands to
+          // this machine's home); any other login is a foreign absolute path.
+          if (candidate === ownHome || ownHome.startsWith(`${candidate}/`)) continue;
+          hits.push(`${path.relative(home, abs)} (${match})`);
+        }
       }
     }
   }
@@ -494,10 +507,14 @@ function checkModels(home, repo) {
     return;
   }
   const known = new Set(available.stdout.split("\n").map((l) => l.trim()).filter(Boolean));
+  // The catalog is only complete when the auth-gated namespace shows up: it
+  // appears exclusively with credentials, and without them the listing is a
+  // filtered subset (the free models) that still advertises models OpenCode
+  // already retired. A missing id in an incomplete catalog is not evidence of
+  // a retired model, so it is reported as unchecked instead of a failure.
   const hasAuthNamespace = [...known].some((id) => id.startsWith("opencode-go/"));
-  // A small catalog, or one without the auth-gated namespace, cannot validate
-  // the ids: report them as unchecked instead of inventing a failure.
-  const limited = !(known.size >= MIN_FULL_CATALOG || hasAuthNamespace);
+  const namespaces = new Set([...known].map((id) => id.split("/")[0]));
+  const limited = !hasAuthNamespace || known.size < MIN_FULL_CATALOG;
 
   const problems = [];
   const unverified = [];
@@ -506,7 +523,9 @@ function checkModels(home, repo) {
     for (const [agent, model] of Object.entries(effective[profile])) {
       checked += 1;
       if (known.has(model)) continue;
-      if (limited) unverified.push(`${profile}:${agent}=${model}`);
+      const namespace = model.includes("/") ? model.split("/")[0] : null;
+      const invisible = namespace !== null && !namespaces.has(namespace);
+      if (limited || invisible) unverified.push(`${profile}:${agent}=${model}`);
       else problems.push(`${profile}:${agent}=${model}`);
     }
   }
