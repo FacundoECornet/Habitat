@@ -22,8 +22,8 @@ usuarios sin credencial de OpenCode Zen.
 - **La home ajena no se detectaba en su forma de Windows.** El check `portable-paths` solo
   buscaba `/home/<login>`, así que en Windows no veía una home de otra máquina. Ahora
   detecta las tres formas que el payload puede traer: POSIX, Windows nativo (`C:/Users/...`)
-  y el montaje de WSL (`/mnt/c/Users/...`). Un placeholder documentado (`C:/Users/...`) no se
-  confunde con una home real.
+  y el montaje de WSL (el prefijo `/mnt/<drive>/Users/...`). Un placeholder documentado
+  (`C:/Users/...`) no se confunde con una home real.
 - **El tooling Bash no funcionaba en macOS.** `declare -A` (bash 4) en el scanner de rutas,
   `stat -c` (GNU) y `sort -z` (GNU) en el resto del tooling: con el bash 3.2 y las
   herramientas BSD de macOS, el scanner no arrancaba y el dry-run de la captura fallaba. Ahora
