@@ -494,10 +494,14 @@ function checkModels(home, repo) {
     return;
   }
   const known = new Set(available.stdout.split("\n").map((l) => l.trim()).filter(Boolean));
+  // The catalog is only complete when the auth-gated namespace shows up: it
+  // appears exclusively with credentials, and without them the listing is a
+  // filtered subset (the free models) that still advertises models OpenCode
+  // already retired. A missing id in an incomplete catalog is not evidence of
+  // a retired model, so it is reported as unchecked instead of a failure.
   const hasAuthNamespace = [...known].some((id) => id.startsWith("opencode-go/"));
-  // A small catalog, or one without the auth-gated namespace, cannot validate
-  // the ids: report them as unchecked instead of inventing a failure.
-  const limited = !(known.size >= MIN_FULL_CATALOG || hasAuthNamespace);
+  const namespaces = new Set([...known].map((id) => id.split("/")[0]));
+  const limited = !hasAuthNamespace || known.size < MIN_FULL_CATALOG;
 
   const problems = [];
   const unverified = [];
@@ -506,7 +510,9 @@ function checkModels(home, repo) {
     for (const [agent, model] of Object.entries(effective[profile])) {
       checked += 1;
       if (known.has(model)) continue;
-      if (limited) unverified.push(`${profile}:${agent}=${model}`);
+      const namespace = model.includes("/") ? model.split("/")[0] : null;
+      const invisible = namespace !== null && !namespaces.has(namespace);
+      if (limited || invisible) unverified.push(`${profile}:${agent}=${model}`);
       else problems.push(`${profile}:${agent}=${model}`);
     }
   }
