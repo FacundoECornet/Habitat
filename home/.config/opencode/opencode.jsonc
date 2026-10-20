@@ -1,7 +1,7 @@
 {
   // Única fuente de verdad de la config de opencode del hábitat.
   // Antes vivía partida entre opencode.json (plugins) y opencode.jsonc
-  // (agentes + MCP); quedó fusionada acá (Ola 3 del MASTER-PLAN).
+  // (agentes + MCP); quedó fusionada acá.
   "$schema": "https://opencode.ai/config.json",
 
   // Plugins locales + paquetes npm. La ruta es relativa a este archivo, por eso

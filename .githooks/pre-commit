@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pre-commit — fail-closed staged-secret gate for ordinary commits (D-09/D-11/D-12)
+# pre-commit — fail-closed staged-secret gate for ordinary commits
 #
 # What it does:
 #   Scans the STAGED INDEX blobs (not the working tree) for five secret-signature
@@ -18,11 +18,10 @@
 # Detector policy:
 #   The five secret-signature rules are defined once in lib/secret-scan.sh
 #   (fragment-built) and sourced here, so this gate and capture's scans cannot
-#   drift (D-04/D-10). Prefix-style token rules require a plausible token-body
+#   drift. Prefix-style token rules require a plausible token-body
 #   length and the private-key rule is anchored to real PEM header structure, so
 #   ordinary hyphenated prose and documentation quoting a bare marker do not
-#   match. Only a narrow exact-path + exact-content allowlist of the locked
-#   planning docs is exempted.
+#   match.
 #
 # Bypass limitation:
 #   `git commit --no-verify` bypasses this hook by design (native Git behavior).
@@ -35,7 +34,7 @@
 set -u
 set -o pipefail
 
-# --- load the shared fragment-built secret detector (D-04/D-10) ------------
+# --- load the shared fragment-built secret detector -------------------------
 # The five rules live in one library so this gate and capture's scans can never
 # drift. The library assembles every signature from fragments, so neither this
 # hook nor the library self-matches when its own source is staged.
@@ -44,32 +43,6 @@ if ! . "$HOOK_DIR/../lib/secret-scan.sh"; then
   printf 'BLOCKED: scan-failed (cannot load shared secret detector lib/secret-scan.sh)\n' >&2
   exit 1
 fi
-
-# --- canonical documentation exceptions (exact path AND exact content) -------
-# Only the locked planning docs may carry canonical examples of the signatures,
-# and only on the exact lines below. Whole files or file types are never exempt.
-# These fragments are FROZEN to the documented text and decoupled from the live
-# (tightened) detectors, so the exemption keeps matching the verbatim docs.
-DOC_APIKEY="${F_APIKEY}${F_UND}"
-DOC_SK='sk'"${F_DASH}"
-DOC_XOXB="${F_XOXB}${F_DASH}"
-DOC_PK="${F_PKB} .*${F_PKE}"
-SIG_GHO="${F_GH}o${F_UND}"
-# Frozen documented text: the locked docs literally record the narrow two-letter
-# class, so the allowlist string must not track the live (broadened) detector.
-SIG_GH_DOC="${F_GH}${F_OP}${F_UND}"
-CANON_D09="- **D-09:** Pre-commit hook is bash grep fail-closed (zero deps); patterns cover \`${DOC_APIKEY}\`, \`${SIG_GH_DOC}\`, \`${DOC_SK}\`, \`${DOC_XOXB}\`, \`${DOC_PK}\`; aborts on hit with a named reason. No gitleaks binary (breaks no-sudo constraint)."
-allowlist_check() {
-  local path="$1" text="$2"
-  case "$path" in
-    .planning/phases/01-inventory-exclusions-manifest/01-CONTEXT.md|\
-    .planning/phases/01-inventory-exclusions-manifest/01-RESEARCH.md)
-      ;;
-    *) return 1 ;;
-  esac
-  [ "$text" = "$CANON_D09" ] && return 0
-  return 1
-}
 
 # --- reporting via the shared library (rule + path + line; never bytes) ------
 blocked=0
@@ -82,7 +55,7 @@ scan_path() {
     return
   fi
 
-  secret_scan_content "$path" "$content" allowlist_check
+  secret_scan_content "$path" "$content"
   [ "$SECRET_SCAN_BLOCKED" -eq 1 ] && blocked=1
 }
 
@@ -110,7 +83,7 @@ while IFS= read -r -d '' staged; do
 done < "$staged_list"
 
 if [ "$blocked" -ne 0 ]; then
-  printf 'pre-commit: commit blocked by the secret gate (D-09). Bypass: git commit --no-verify.\n' >&2
+  printf 'pre-commit: commit blocked by the secret gate. Bypass: git commit --no-verify.\n' >&2
   exit 1
 fi
 exit 0
