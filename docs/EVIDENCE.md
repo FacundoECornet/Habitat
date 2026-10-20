@@ -75,6 +75,27 @@ verify: all checks passed
 - La verificación no falla por causas del entorno (sin catálogo de modelos, sin credencial).
 - Los binarios instalados en `~/bin` son autocontenidos: funcionan sin el repo.
 
+## CI: las tres plataformas
+
+Desde `v0.2.0` la CI corre en las tres plataformas, con los tests, los gates del repo
+(manifiesto, scan de rutas, symlinks, sintaxis del hook) y un smoke de `install` + `verify`
+sobre un home temporal **fuera** del repositorio.
+
+- **Fecha:** 2026-10-20 · **Commit:** `v0.2.0` · **Workflow:** `ci.yml`
+
+| Plataforma | Node | Resultado | Suite |
+|---|---|---|---|
+| Ubuntu (Linux/WSL) | 22.22.2 · 24 · 26 | 3/3 en verde | 65 tests, 0 fail |
+| macOS | 24 | en verde | 65 tests, 0 fail |
+| Windows (PowerShell) | 24 | en verde | 65 tests, 47 pass, 18 skip, 0 fail |
+
+Los 18 `skip` en Windows son las suites de la herramienta Bash (`capture.sh` y el scanner de
+rutas): necesitan `rsync`, que no existe ahí. La captura en Windows se hace desde WSL.
+
+El job semanal del catálogo de modelos corre una vez por semana sobre el CLI de OpenCode y
+abre un issue con la lista exacta de agentes y perfiles afectados cuando un ID público se
+retira del catálogo.
+
 ## Nota
 
 Los `skip` son esperables sin credenciales. Con `opencode auth login` conectado, el check
