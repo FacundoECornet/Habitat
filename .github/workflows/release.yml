@@ -68,14 +68,20 @@ jobs:
         run: |
           set -u
           head_sha="$(git rev-parse HEAD)"
-          run="$(gh run list --branch master --limit 1 --json databaseId,conclusion,headSha --jq '.[0] | "\(.databaseId) \(.conclusion) \(.headSha)"')"
-          echo "ultimo run de master: $run"
+          # Only the CI workflow counts: this workflow's own run also happens on
+          # master, and it is not the CI.
+          run="$(gh run list --branch master --workflow ci.yml --event push --limit 1 --json databaseId,conclusion,headSha --jq '.[0] | "\(.databaseId) \(.conclusion) \(.headSha)"')"
+          if [ -z "$run" ]; then
+            echo "::error::no hay ningun run de la CI en master"
+            exit 1
+          fi
+          echo "ultimo run de la CI en master: $run"
           run_id="${run%% *}"
           rest="${run#* }"
           conclusion="${rest%% *}"
           run_sha="${rest##* }"
           if [ "$conclusion" != "success" ]; then
-            echo "::error::el ultimo run de master no esta en verde (conclusion: $conclusion)"
+            echo "::error::la CI de master no esta en verde (conclusion: $conclusion)"
             exit 1
           fi
           if [ "$run_sha" != "$head_sha" ]; then

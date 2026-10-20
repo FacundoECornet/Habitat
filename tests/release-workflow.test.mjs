@@ -42,7 +42,11 @@ test("release: se niega a publicar un tag que ya existe", () => {
 // Nada se publica sin las notas escritas y la CI en verde.
 test("release: exige notas en el CHANGELOG y CI en verde", () => {
   assert.match(workflow, /el CHANGELOG no tiene la seccion/, "exige la seccion del CHANGELOG");
-  assert.match(workflow, /el ultimo run de master no esta en verde/, "exige la CI en verde");
+  assert.match(workflow, /la CI de master no esta en verde/, "exige la CI en verde");
+  // The green run has to be the CI workflow's, not this workflow's own run
+  // (which also happens on master).
+  assert.match(workflow, /--workflow ci\.yml/, "mira el run del workflow de CI");
+  assert.match(workflow, /--event push/, "mira el run de push de la CI");
   assert.match(workflow, /la CI no corrio sobre este commit/, "exige que la CI sea de este commit");
   assert.match(workflow, /release-notes\.md/, "las notas salen del CHANGELOG");
 });
