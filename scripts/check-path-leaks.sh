@@ -126,7 +126,12 @@ fi
 
 # --- reporting: path, rule, line only; never the matched text ---------------
 blocked=0
-declare -A seen=()
+# De-duplication without `declare -A`: the set is reset before every scan unit
+# (each file in tree mode, each path in Git mode) and the key is "rule|line",
+# which only carries safe characters. `declare -A` needs bash 4, and macOS
+# still ships bash 3.2, where it would break the whole scanner.
+NL=$'\n'
+seen_lines="$NL"
 report() { printf 'LEAK: rule=%s path=%s line=%s\n' "$1" "$2" "$3" >&2; }
 
 scan_content() {
@@ -142,9 +147,11 @@ scan_content() {
       while IFS= read -r ln; do
         [ -n "$ln" ] || continue
         lineno="${ln%%:*}"
-        key="${name}|${path}|${lineno}"
-        [ -n "${seen[$key]:-}" ] && continue
-        seen[$key]=1
+        key="${name}|${lineno}"
+        case "$seen_lines" in
+          *"$NL$key$NL"*) continue ;;
+        esac
+        seen_lines="$seen_lines$key$NL"
         report "$name" "$path" "$lineno"
         blocked=1
       done <<< "$out"
@@ -185,6 +192,7 @@ if [ "$MODE" = "tree" ]; then
     rel="${p#"$ROOT"/}"
     [ "$rel" = "$p" ] && rel="$p"
     if content="$(cat -- "$p" 2>/dev/null)"; then
+      seen_lines="$NL"
       scan_content "$rel" "$content"
     else
       report 'scan-failed' "$rel" '?'
@@ -235,6 +243,10 @@ sort -z -u "$CAND_RAW" > "$CAND_SORTED" 2>/dev/null || {
 
 scan_path() {
   local path="$1" idx content full
+  # Each path is scanned once per unit: the finding set is reset here, so a
+  # leak present in both the index blob and the worktree file is reported
+  # once, exactly as before.
+  seen_lines="$NL"
   # Indexed candidate: the path resolves in the index, so `git show ":$path"`
   # MUST succeed. A failed indexed-blob read is a scan failure, never a silent
   # skip. Untracked candidates have no index blob and are read from the worktree.
