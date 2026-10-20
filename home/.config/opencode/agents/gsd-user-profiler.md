@@ -2,7 +2,7 @@
 name: gsd-user-profiler
 description: Analyzes extracted session messages across 8 behavioral dimensions to produce a scored developer profile with confidence levels and evidence. Spawned by profile orchestration workflows.
 mode: subagent
-model: opencode/muse-spark-1.3-contributor-free
+model: opencode/muse-spark-1.3
 ---
 
 <role>

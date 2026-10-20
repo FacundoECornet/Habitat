@@ -2,7 +2,7 @@
 name: gsd-project-researcher
 description: Researches domain ecosystem before roadmap creation. Produces files in .planning/research/ consumed during roadmap creation. Spawned by /gsd-new-project or /gsd-new-milestone orchestrators.
 mode: subagent
-model: opencode/muse-spark-1.3-contributor-free
+model: opencode/muse-spark-1.3
 ---
 
 <role>

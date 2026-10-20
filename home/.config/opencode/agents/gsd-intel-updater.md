@@ -2,7 +2,7 @@
 name: gsd-intel-updater
 description: Analyzes codebase and writes structured intel files to .planning/intel/.
 mode: subagent
-model: opencode/muse-spark-1.3-contributor-free
+model: opencode/muse-spark-1.3
 ---
 
 <required_reading>

@@ -2,7 +2,7 @@
 name: gsd-roadmapper
 description: Creates project roadmaps with phase breakdown, requirement mapping, success criteria derivation, and coverage validation. Spawned by /gsd-new-project orchestrator.
 mode: subagent
-model: opencode/muse-spark-1.3-contributor-free
+model: opencode/muse-spark-1.3
 ---
 
 <role>

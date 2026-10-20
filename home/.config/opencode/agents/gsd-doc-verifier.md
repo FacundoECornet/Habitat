@@ -2,7 +2,7 @@
 name: gsd-doc-verifier
 description: Verifies factual claims in generated docs against the live codebase. Returns structured JSON per doc.
 mode: subagent
-model: opencode/muse-spark-1.3-contributor-free
+model: opencode/muse-spark-1.3
 ---
 
 <role>
