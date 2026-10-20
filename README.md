@@ -47,7 +47,7 @@ el MCP de JEV y la validación del catálogo de modelos. Conectala más tarde si
 | Usar Habitat en Windows | PowerShell 5.1+; WSL no es necesario. |
 | Usar GSD | Instala con `--with-gsd`. |
 | Instalar Graphify | Python 3; se instala con `--with-deps`. |
-| Capturar cambios para mantener tu snapshot | Bash, `rsync` y GNU coreutils. |
+| Capturar cambios para mantener tu snapshot | Bash y `rsync` (en Windows: usá WSL). |
 
 <sub>OpenCode no se instala ni autentica desde Habitat: eso se hace una vez por entorno.</sub>
 
@@ -197,7 +197,10 @@ Ver [`docs/CAPTURE.md`](docs/CAPTURE.md).
 ## Estado del proyecto
 
 Etapa 1 cerrada: restore, verificación, captura, GSD, skills y plugins funcionan en Windows,
-Linux, macOS y WSL. Lo que sigue está en el [CHANGELOG](CHANGELOG.md) y en los issues abiertos.
+Linux, macOS y WSL. Las tres plataformas corren en CI, con los tests y un smoke de
+instalación sobre un home limpio.
+
+Lo que sigue está en el [CHANGELOG](CHANGELOG.md).
 
 Evidencia de instalación sobre un clone nuevo del repo público, sin credenciales, en Linux/WSL
 y en Windows nativo: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).
