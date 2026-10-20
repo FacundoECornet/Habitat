@@ -38,6 +38,10 @@ herramientas) que podés restaurar en otra máquina con un comando, sin copiar a
 Necesitás **[Git](https://git-scm.com/downloads)**, **[Node.js/npm](https://nodejs.org/en/download)**
 y **[OpenCode](https://opencode.ai/docs/)** instalados. Node.js **22.22.2+**, **24.15+** o **26+**.
 
+**No hace falta cuenta de OpenCode Zen para instalar**: sin credencial, todo el framework
+funciona (GSD, agentes, skills, plugins, restore y verificación) y solo quedan desactivados
+el MCP de JEV y la validación del catálogo de modelos. Conectala más tarde si los querés.
+
 | Tarea | Requisito adicional |
 |---|---|
 | Usar Habitat en Windows | PowerShell 5.1+; WSL no es necesario. |
