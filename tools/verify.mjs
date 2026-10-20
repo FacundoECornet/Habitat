@@ -318,19 +318,14 @@ function checkCli() {
     check("cli-tools", false, failures.join(", "), "revisá la instalación de esas CLIs; --no-cli omite la comprobación");
     return;
   }
+  // Not installed is a state, not a fault: these CLIs are optional and only
+  // arrive with `--with-deps`. The check stays green and says what is missing.
   check(
     "cli-tools",
     true,
     missing.length > 0 ? `responden (no instalados: ${missing.join(", ")})` : "responden",
+    missing.length > 0 ? "instalá las CLIs opcionales con node tools/install.mjs --with-deps" : "",
   );
-  if (missing.length > 0) {
-    results.push({
-      name: "cli-tools-installed",
-      ok: false,
-      detail: `faltan: ${missing.join(", ")}`,
-      hint: "instalar con tools/install.mjs --with-deps",
-    });
-  }
 }
 
 function checkPlugins(home) {
