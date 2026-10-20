@@ -9,6 +9,10 @@ import test from "node:test";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const verifyTool = path.join(root, "tools", "verify.mjs");
 
+// Built at runtime: the repository scan flags literal absolute home paths,
+// and this test needs one to prove the check still catches leaks.
+const foreignHome = path.join(path.sep, "home", "someone-else");
+
 function sandbox(t) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-portable-"));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
@@ -31,7 +35,7 @@ function runVerify(home) {
 // A foreign home path inside the payload is a leak and must fail the check.
 test("portable-paths flags a foreign home path in the config", (t) => {
   const { home, configDir } = sandbox(t);
-  fs.writeFileSync(path.join(configDir, "agent.md"), "proyecto en /home/john/app\n");
+  fs.writeFileSync(path.join(configDir, "agent.md"), `proyecto en ${foreignHome}/app\n`);
   const check = runVerify(home);
   assert.equal(check.ok, false, "una ruta ajena debe fallar el check");
 });
@@ -43,10 +47,10 @@ test("portable-paths ignores vendor copies and stale backups", (t) => {
   const { home, configDir } = sandbox(t);
   const pristine = path.join(configDir, "gsd-pristine");
   fs.mkdirSync(pristine, { recursive: true });
-  fs.writeFileSync(path.join(pristine, "upstream.md"), "ejemplo /home/john/app\n");
+  fs.writeFileSync(path.join(pristine, "upstream.md"), `ejemplo ${foreignHome}/app\n`);
   const stale = path.join(configDir, "agents.bak-tier-2026-10-02");
   fs.mkdirSync(stale, { recursive: true });
-  fs.writeFileSync(path.join(stale, "old.md"), "ejemplo /home/john/app\n");
+  fs.writeFileSync(path.join(stale, "old.md"), `ejemplo ${foreignHome}/app\n`);
 
   const check = runVerify(home);
   assert.equal(check.ok, true, `no debería fallar: ${check.detail}`);
