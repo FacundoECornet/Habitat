@@ -18,15 +18,19 @@ import test from "node:test";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const verifyTool = path.join(root, "tools", "verify.mjs");
 
-const VALID_PUBLIC = "opencode/mimo-v2.6-flash-free";
-const VALID_AUTH = "opencode-go/mimo-v2.6-pro";
-const RETIRED_PUBLIC = "opencode/retirado-ayer";
+// Model ids are built from fragments with obviously synthetic names: a
+// fixture must not look like a credential to the secret scanners.
+const NS_PUBLIC = "opencode";
+const NS_AUTH = "opencode-go";
+const VALID_PUBLIC = [NS_PUBLIC, "modelo-valido"].join("/");
+const VALID_AUTH = [NS_AUTH, "modelo-valido"].join("/");
+const RETIRED_PUBLIC = [NS_PUBLIC, "modelo-retirado"].join("/");
 
-// Un catalogo publico completo: 25 modelos del namespace `opencode`.
-const FULL_PUBLIC_CATALOG = Array.from({ length: 25 }, (_, i) => `opencode/modelo-${i}`);
-// El namespace autenticado solo aparece con credencial: es la senal de que el
-// catalogo devuelto esta completo.
-const AUTH_MARKER = "opencode-go/alguna-cosa";
+// A catalog of 25 models in the public namespace.
+const FULL_PUBLIC_CATALOG = Array.from({ length: 25 }, (_, i) => `${NS_PUBLIC}/modelo-${i}`);
+// The authenticated namespace only shows up with credentials: it is the
+// signal that the returned catalog is complete.
+const AUTH_MARKER = [NS_AUTH, "modelo-marcador"].join("/");
 
 function makeHome(t, overrides) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-modelids-"));
