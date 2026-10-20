@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.22.2', '24', '26']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install MCP dependencies
+        run: npm ci --prefix home/.config/opencode --no-audit --no-fund
+
+      - name: Tests
+        run: npm test
+
+      - name: Manifest contract
+        run: bash scripts/validate-manifest.sh
+
+      - name: Path leak scan
+        run: bash scripts/check-path-leaks.sh
+
+      - name: Hook syntax
+        run: bash -n .githooks/pre-commit
