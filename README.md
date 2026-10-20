@@ -195,6 +195,9 @@ Ver [`docs/CAPTURE.md`](docs/CAPTURE.md).
 Etapa 1 cerrada: restore, verificación, captura, GSD, skills y plugins funcionan en Windows,
 Linux, macOS y WSL. Lo que sigue está en el [CHANGELOG](CHANGELOG.md) y en los issues abiertos.
 
+Evidencia de instalación sobre un clone nuevo del repo público, sin credenciales:
+[`docs/EVIDENCE-LINUX.md`](docs/EVIDENCE-LINUX.md).
+
 ## Licencia y contribución
 
 [MIT](LICENSE) · atribuciones en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) ·
