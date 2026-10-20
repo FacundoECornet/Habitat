@@ -31,7 +31,9 @@
         "gsd-install-state.json",
         "backup-*"
       ],
-      "post_steps": ["npm ci"]
+      "post_steps": [
+        "npm ci"
+      ]
     },
     {
       "origin": ".claude/skills",
@@ -90,60 +92,6 @@
     {
       "origin": ".gsd",
       "dest": "home/.gsd",
-      "mode": "copy",
-      "excludes": [
-        "node_modules/",
-        "bin/",
-        "*.tar.gz",
-        "*.tgz",
-        "*.tar",
-        "*.zip",
-        "*.bak*",
-        "*.backup-*",
-        "opencode-backup/",
-        "opencode-backup-*.tar.gz",
-        "agents.bak-*",
-        "jev.env",
-        ".git-credentials",
-        ".claude.json",
-        ".git/",
-        "*.local",
-        "*.db",
-        "*.db-wal",
-        "*.db-shm"
-      ],
-      "post_steps": []
-    },
-    {
-      "origin": "AGENTS.md",
-      "dest": "home/AGENTS.md",
-      "mode": "copy",
-      "excludes": [
-        "node_modules/",
-        "bin/",
-        "*.tar.gz",
-        "*.tgz",
-        "*.tar",
-        "*.zip",
-        "*.bak*",
-        "*.backup-*",
-        "opencode-backup/",
-        "opencode-backup-*.tar.gz",
-        "agents.bak-*",
-        "jev.env",
-        ".git-credentials",
-        ".claude.json",
-        ".git/",
-        "*.local",
-        "*.db",
-        "*.db-wal",
-        "*.db-shm"
-      ],
-      "post_steps": []
-    },
-    {
-      "origin": ".bashrc",
-      "dest": "home/.bashrc",
       "mode": "copy",
       "excludes": [
         "node_modules/",

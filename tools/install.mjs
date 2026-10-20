@@ -700,6 +700,64 @@ function copyBin(options) {
   return true;
 }
 
+// The payload does not ship a shell file: a snapshot of somebody's .bashrc is
+// personal and machine-bound. The only thing Habitat needs from it is the
+// ~/bin entry in PATH, so the installer writes that single guarded block
+// (POSIX) or updates the user PATH (Windows) instead.
+const PATH_BLOCK = [
+  "",
+  "# Added by Habitat: tools installed in ~/bin (gsd-route, gsd-model-pick, ...)",
+  'if [ -d "$HOME/bin" ]; then',
+  '    export PATH="$HOME/bin:$PATH"',
+  "fi",
+  "",
+].join("\n");
+
+function ensureBinOnPath(options) {
+  const binDir = path.join(options.home, "bin");
+  if (options.dryRun) {
+    log("path", `dry-run: se agregaría ${binDir} al PATH`);
+    return true;
+  }
+  if (IS_WIN) {
+    const script = [
+      "$p=[Environment]::GetEnvironmentVariable('Path','User')",
+      "if (($p -split ';') -notcontains '" + binDir.replace(/'/g, "''") + "') {",
+      "  [Environment]::SetEnvironmentVariable('Path', ($p + ';" + binDir.replace(/'/g, "''") + "'), 'User')",
+      "}",
+    ].join("; ");
+    const result = run("powershell", ["-NoProfile", "-Command", script], { capture: true });
+    if (result.status !== 0) {
+      warn(`no se pudo agregar ${binDir} al PATH de usuario: agregalo a mano`);
+      return true;
+    }
+    log("path", `${binDir} agregado al PATH de usuario; reabri la terminal para que tome efecto`);
+    return true;
+  }
+
+  const rc = path.join(options.home, ".bashrc");
+  let current = "";
+  try {
+    current = fs.readFileSync(rc, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      warn(`no se pudo leer ${rc}: ${error.message}`);
+      return true;
+    }
+  }
+  if (current.includes("Added by Habitat: tools installed in ~/bin")) {
+    log("path", `${binDir} ya está en el PATH`);
+    return true;
+  }
+  try {
+    fs.appendFileSync(rc, PATH_BLOCK, "utf8");
+    log("path", `${binDir} agregado al PATH en ${rc}; reabri la terminal para que tome efecto`);
+  } catch (error) {
+    warn(`no se pudo agregar ${binDir} al PATH (${error.message}): agregalo a mano`);
+  }
+  return true;
+}
+
 function copySupportModules(options) {
   const sourceDir = path.join(options.repo, "lib");
   // Every module of lib/ travels with the installed bins: the tools in ~/bin
@@ -858,6 +916,7 @@ function main() {
 
   if (!copyBin(options)) process.exit(EXIT_FAILED);
   if (!copySupportModules(options)) process.exit(EXIT_FAILED);
+  if (!ensureBinOnPath(options)) process.exit(EXIT_FAILED);
 
   if (options.skipPlugins) log("plugins", "omitido (--skip-plugins)");
   else if (options.dryRun) log("plugins", "dry-run: se verificaría/instalaría context-mode");

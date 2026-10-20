@@ -6,7 +6,7 @@
 #
 # Fail-closed: exits nonzero with a named diagnostic (`INVALID: <code>`) on any
 # contract violation. Accepts only a syntactically valid JSON manifest whose
-# entries match the exact six-entry allowlist with copy-only mode.
+# entries match the exact four-entry allowlist with copy-only mode.
 #
 # Zero dependencies beyond Bash and Node.js built-ins (no jq, no packages).
 
@@ -75,9 +75,7 @@ const ALLOWLIST = new Map([
   ['.config/opencode', 'home/.config/opencode'],
   ['.claude/skills', 'home/.claude/skills'],
   ['.agents/skills', 'home/.agents/skills'],
-  ['.gsd', 'home/.gsd'],
-  ['AGENTS.md', 'home/AGENTS.md'],
-  ['.bashrc', 'home/.bashrc']
+  ['.gsd', 'home/.gsd']
 ]);
 if (doc.entries.length !== ALLOWLIST.size) {
   invalid('manifest-entry-count', 'entries must contain exactly ' + ALLOWLIST.size + ' roots (got ' + doc.entries.length + ')');

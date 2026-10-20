@@ -43,7 +43,12 @@ flowchart LR
 | `home/.config/opencode/` | `~/.config/opencode/` | Config, agentes, comandos, skills, router por perfil |
 | `home/.agents/skills/` | `~/.agents/skills/` | Skills portables (Archify, find-skills, typesafe-ai) |
 | `home/.claude/skills/` | `~/.claude/skills/` | Skills de GSD |
-| `home/AGENTS.md`, `home/.bashrc`, `home/.gitconfig` | `~/` | Convenciones y shell |
+| `home/.gsd/` | `~/.gsd/` | Configuración del router de GSD |
+
+El payload **no** incluye archivos de shell ni de convenciones del hogar: `~/.bashrc`,
+`~/AGENTS.md` o `~/.gitconfig` son personales y quedan en la máquina que los escribió. Lo
+único que Habitat agrega al entorno es el `~/bin` en el `PATH`, y lo hace el instalador (no
+un snapshot).
 
 El destino nunca se borra: lo que va a ser pisado se copia antes a
 `~/.habitat/backups/<timestamp>/`.
