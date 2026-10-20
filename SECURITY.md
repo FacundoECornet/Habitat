@@ -42,8 +42,26 @@ reporta **regla, ruta y línea**, nunca el valor detectado.
 seguridad. `git commit --no-verify` lo desactiva, y un valor disfrazado puede pasar. La
 responsabilidad de no filtrar secretos es de quien commitea.
 
-GitHub además tiene **secret scanning** y **push protection** activos en este repo: si un
-patrón conocido llega a un push, el push se rechaza.
+## Protecciones del lado de GitHub
+
+Además del hook local, el repo tiene esta capa activa en GitHub:
+
+| Protección | Qué hace |
+|---|---|
+| **Secret scanning** | Analiza cada push contra los patrones de credencial que GitHub conoce y avisa. |
+| **Push protection** | Si un patrón conocido llega a un push, el push se rechaza antes de llegar al repo. |
+| **Dependabot security updates** | Abre PRs automáticos con las actualizaciones de seguridad de las dependencias declaradas. |
+| **Ruleset de ramas** (todas) | Ninguna rama se puede borrar ni reescribir por force-push; la historia es lineal. |
+| **Ruleset de tags** | Los tags publicados no se pueden borrar ni reescribir: cada release apunta a un commit inmutable. |
+| **Protección de `master`** | Un push a `master` exige que el check `CI` esté verde; no hay force-push ni borrado de rama. |
+| **Merges squash + sign-off** | Cada PR entra como un commit, con el mensaje firmado. |
+| **CI pineado** | Las actions del workflow están fijadas por SHA y el pipeline corre `npm audit` sobre los dos lockfiles. |
+| **Run semanal** | El pipeline también corre por cron: detecta roturas de upstream (una release nueva de GSD, un modelo que sale del catálogo) sin esperar un push. |
+
+Dos cosas que GitHub no habilita en este repo (y no están bajo control del proyecto):
+los **patrones de secret scanning propios** (requieren un plan que este repo no tiene; el
+archivo `.github/secret-scanning.yml` queda por si se habilita) y la regla de **restringir
+rutas de archivo sensibles** en los rulesets.
 
 ## Alcance
 
