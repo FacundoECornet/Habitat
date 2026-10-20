@@ -78,8 +78,8 @@ Primer lanzamiento público de Habitat.
 
 ### Aviso importante
 
-Este repositorio fue **recreado** para eliminar material interno del historial. Los clones
-previos ya no son válidos: hay que volver a clonarlo.
+El repositorio se publicó **reconstruido desde cero**, con el historial revisado y sin material
+interno.
 
 ```bash
 git clone https://github.com/FacundoECornet/Habitat.git ~/code/habitat
