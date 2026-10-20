@@ -29,6 +29,17 @@ usuarios sin credencial de OpenCode Zen.
   herramientas BSD de macOS, el scanner no arrancaba y el dry-run de la captura fallaba. Ahora
   la deduplicación no usa arrays asociativos, el tamaño de archivo se toma con `wc -c` y la
   deduplicación NUL-safe la hace Node, con el mismo resultado byte a byte.
+- **El preview de la captura daba "drift" siempre en macOS.** El veredicto se leía del
+  listado de rsync, y el rsync de macOS (2.6.9) itemiza una diferencia de mtime sobre un
+  árbol convergente. Ahora el veredicto lo decide la accounting del propio motor (checksum de
+  contenido más bit ejecutable) y el listado de rsync queda solo para mostrar.
+- **La captura contaba como drift lo que el manifiesto excluye.** Los excludes se aplicaban
+  solo al origen, así que el `node_modules/` de un checkout de desarrollo se reportaba como
+  6967 archivos a borrar, cuando no es payload y la captura no lo publicaría. Ahora se
+  aplican a los dos lados del comparativo.
+- **Los backups del router de GSD se publicaban.** La raíz de GSD guarda copias con
+  timestamp (`backup-<sello>/`) que no son payload; ahora quedan excluidas, igual que ya
+  pasaban en `.config/opencode`.
 
 ### Agregado
 
@@ -44,6 +55,9 @@ usuarios sin credencial de OpenCode Zen.
   commitee.
 - **Suite de pruebas del scanner de rutas** (8 casos) y **del check de IDs de modelo**
   (7 casos), con el CLI de OpenCode sustituido por un stub.
+- **Suite del contrato del manifiesto** (4 casos) que mantiene los dos validadores en sync:
+  hasta ahora el de Bash exigía `*.backup-*` y el de Node no, así que un manifiesto podía ser
+  válido para el restore y no para la captura.
 - **`tools/check-model-ids.mjs`**: contrasta los IDs del payload (perfiles de GSD, configuración
   y definiciones de agente) contra el catálogo. Con catálogo completo y un ID público
   retirado sale con código 1 y lista dónde aparece cada ID; con el catálogo truncado o sin
