@@ -12,7 +12,9 @@ import test from "node:test";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workflowPath = path.join(root, ".github", "workflows", "release.yml");
-const workflow = fs.readFileSync(workflowPath, "utf8");
+// The file is read from the working tree, which on Windows can be CRLF: the
+// assertions have to look at the content, not at the line endings.
+const workflow = fs.readFileSync(workflowPath, "utf8").replace(/\r\n/g, "\n");
 
 // La release nunca se publica sola: siempre con una decision humana.
 test("release: solo se dispara a mano", () => {

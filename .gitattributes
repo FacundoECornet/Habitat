@@ -13,6 +13,10 @@ scripts/*.tsv text eol=lf
 # Herramientas y suites node
 *.mjs text eol=lf
 
+# Workflows de Actions: el runner usa LF, y los checks que los leen (el
+# workflow de release valida el CHANGELOG) no deben depender del checkout.
+.github/workflows/*.yml text eol=lf
+
 # Manifiestos y config funcional (JSON.parse tolera CRLF, pero LF evita ruido)
 MANIFEST.json text eol=lf
 home/.config/opencode/gsd-router/*.json text eol=lf

@@ -18,6 +18,8 @@ Todas las novedades de Habitat se registran acá, siguiendo
 
 - El check `cli-tools` decía "responden (no instalados: gsd-sdk, graphify)", que se
   contradecía: ahora dice "ok, pero no instaladas: ...".
+- Los workflows de Actions quedan pineados a LF: sin eso, un checkout en Windows los deja
+  con CRLF y el test que verifica sus garantías falla.
 
 ### Documentación
 
