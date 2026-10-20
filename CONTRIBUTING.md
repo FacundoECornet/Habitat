@@ -7,7 +7,7 @@ regla número uno es simple: **nada de tu configuración personal entra al repo*
 
 - Node.js **22.22.2+**, **24.15+** o **26+**.
 - [Git](https://git-scm.com/downloads).
-- Para mantener tu propio snapshot: Bash, `rsync` y GNU coreutils (en Windows, usá WSL).
+- Para mantener tu propio snapshot: Bash y `rsync` (en Windows, usá WSL).
 
 ## Correr los tests
 
@@ -63,6 +63,23 @@ scripts/capture.sh --dry-run
 ```
 
 Ver [`docs/CAPTURE.md`](docs/CAPTURE.md).
+
+## Publicar una version
+
+Las releases se publican con un workflow de **disparo manual** (Actions → *Release* → *Run
+workflow* → `version`), nunca solas. El workflow se niega a publicar si algo no cuadra:
+
+- la versión tiene que tener la forma `vX.Y.Z`;
+- el tag no puede existir ya (los tags son inmutables: mover uno exige desactivar el ruleset,
+  borrarlo y re-tagear);
+- el CHANGELOG tiene que tener la sección `## [X.Y.Z] - AAAA-MM-DD` de esa versión;
+- la CI de `master` tiene que estar en verde **sobre ese commit**.
+
+Las notas de la release salen de esa misma sección del CHANGELOG. Para preparar una versión:
+
+1. Renombrá la sección de cambios pendientes del CHANGELOG a `## [X.Y.Z] - AAAA-MM-DD`.
+2. Esperá a que la CI de `master` termine en verde.
+3. Dispará el workflow con esa versión.
 
 ## Pull requests
 

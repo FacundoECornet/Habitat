@@ -1,0 +1,122 @@
+name: Release
+
+# Publicar una version es una decision manual a proposito: los tags son
+# inmutables, asi que un tag equivocado no se puede mover (habria que
+# desactivar el ruleset, borrar el tag y volver a taguear). El workflow
+# verifica antes de hacer cualquier cosa y nunca reescribe un tag.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version a publicar, con la forma vX.Y.Z (ej. v0.2.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publicar ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Validar la version
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          if ! printf '%s' "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::la version tiene que tener la forma vX.Y.Z (recibido: $VERSION)"
+            exit 1
+          fi
+          # The tag must not exist: tags are immutable, so a second run of this
+          # workflow has to fail instead of moving an already published tag.
+          if git rev-parse "refs/tags/$VERSION" >/dev/null 2>&1; then
+            echo "::error::el tag $VERSION ya existe (los tags son inmutables)"
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/refs/tags/$VERSION" >/dev/null 2>&1; then
+            echo "::error::el tag $VERSION ya existe en el remoto"
+            exit 1
+          fi
+          echo "version ok: $VERSION"
+
+      - name: Validar el CHANGELOG
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -u
+          section="${VERSION#v}"
+          if ! grep -qE "^## \[$section\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md; then
+            echo "::error::el CHANGELOG no tiene la seccion '## [$section] - AAAA-MM-DD'"
+            exit 1
+          fi
+          echo "changelog ok: $section"
+
+      - name: Validar que la CI esta verde
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          head_sha="$(git rev-parse HEAD)"
+          run="$(gh run list --branch master --limit 1 --json databaseId,conclusion,headSha --jq '.[0] | "\(.databaseId) \(.conclusion) \(.headSha)"')"
+          echo "ultimo run de master: $run"
+          run_id="${run%% *}"
+          rest="${run#* }"
+          conclusion="${rest%% *}"
+          run_sha="${rest##* }"
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::el ultimo run de master no esta en verde (conclusion: $conclusion)"
+            exit 1
+          fi
+          if [ "$run_sha" != "$head_sha" ]; then
+            echo "::error::la CI no corrio sobre este commit ($run_sha != $head_sha): espera a que termine o relanzala"
+            exit 1
+          fi
+          echo "CI ok: run $run_id"
+
+      - name: Extraer las notas de la release
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -u
+          section="${VERSION#v}"
+          {
+            echo "## Habitat $VERSION"
+            echo
+            awk -v tag="$section" '
+              $0 ~ "^## \\[" tag "\\] - " { found = 1; next }
+              found && /^## \[/ { exit }
+              found { print }
+            ' CHANGELOG.md
+          } > release-notes.md
+          if [ ! -s release-notes.md ] || [ "$(wc -l < release-notes.md)" -lt 3 ]; then
+            echo "::error::no se pudieron extraer las notas del CHANGELOG"
+            exit 1
+          fi
+          head -5 release-notes.md
+
+      - name: Crear el tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -u
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Habitat $VERSION" -m "Publicado con el workflow de release (workflow_dispatch)."
+          git push origin "refs/tags/$VERSION"
+
+      - name: Crear la release
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$VERSION" --title "Habitat $VERSION" --notes-file release-notes.md

@@ -4,6 +4,16 @@ Todas las novedades de Habitat se registran acá, siguiendo
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [Unreleased]
+
+### Agregado
+
+- **Workflow de release con disparo manual** (Actions → *Release* → *Run workflow*): publica
+  una versión verificando antes que la versión tenga la forma correcta, que el tag no exista
+  ya (los tags son inmutables), que el CHANGELOG tenga la sección de esa versión y que la CI
+  de `master` esté en verde sobre ese commit. Las notas salen del CHANGELOG. Nunca se
+  publica solo.
+
 ## [0.2.0] - 2026-10-20
 
 Cierre de la etapa 1: el motor y la captura quedan cubiertos por pruebas, las tres plataformas
