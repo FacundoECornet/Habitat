@@ -141,3 +141,17 @@ test("path-leaks: el diagnóstico no imprime el texto coincidente", POSIX_ONLY, 
   assert.equal(result.stderr.includes(LEAK), false, "la ruta filtrada no se imprime");
   assert.match(result.stderr, /LEAK: rule=home-absolute-path path=fuga\.txt line=1/);
 });
+
+// La enumeración es NUL-safe: un nombre de archivo con salto de línea o
+// espacios no rompe la deduplicación ni el reporte.
+test("path-leaks: un nombre de archivo con salto de linea se maneja", POSIX_ONLY, (t) => {
+  const dir = repo(t);
+  const odd = "con\nsalto.txt";
+  write(dir, odd, `proyecto en ${LEAK}/app\n`);
+  git(dir, ["add", "-A"]);
+
+  const result = scan([dir]);
+  assert.equal(result.status, 1, `debe bloquear: ${result.stderr}`);
+  assert.match(result.stderr, /rule=home-absolute-path path=con/);
+  assert.match(result.stderr, /salto\.txt line=1/);
+});

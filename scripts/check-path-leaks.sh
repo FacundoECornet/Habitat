@@ -206,7 +206,7 @@ fi
 # --- git candidate mode: staged, tracked, and untracked candidate paths -----
 # Bash variables truncate at the first NUL byte, so Git's NUL-delimited (-z)
 # output cannot be held in a string variable. Enumerate into a mktemp file and
-# preserve NUL boundaries through de-duplication (`sort -z -u`) and iteration
+# preserve NUL boundaries through de-duplication and iteration
 # (`read -r -d ''`). Every Git command's exit status is checked before its
 # output is consumed; any failure blocks with a named scan-failed reason.
 CAND_RAW="$(mktemp)" || {
@@ -234,9 +234,29 @@ git -C "$ROOT" -c core.quotePath=false ls-files --others --exclude-standard -z >
   exit 2
 }
 
-# De-duplication is routed through `sort -z -u`, never `grep`, so a broken grep
-# cannot silently suppress candidates while NUL boundaries are preserved.
-sort -z -u "$CAND_RAW" > "$CAND_SORTED" 2>/dev/null || {
+# De-duplication is routed through a NUL-safe Node pass, never `grep`, so a
+# broken grep cannot silently suppress candidates while NUL boundaries are
+# preserved. `sort -z` is a GNU extension and macOS ships the BSD sort, which
+# does not have it: the de-duplication is done with Node built-ins instead, so
+# the scanner behaves the same on every platform.
+node - "$CAND_RAW" "$CAND_SORTED" <<'NODE' || {
+'use strict';
+const fs = require('fs');
+const raw = fs.readFileSync(process.argv[2]);
+const parts = [];
+let start = 0;
+for (let i = 0; i < raw.length; i++) {
+  if (raw[i] === 0) {
+    if (i > start) parts.push(raw.subarray(start, i).toString('latin1'));
+    start = i + 1;
+  }
+}
+if (start < raw.length) parts.push(raw.subarray(start).toString('latin1'));
+// Byte-preserving round trip: latin1 maps every byte to one code point.
+const unique = [...new Set(parts)].sort();
+const out = unique.length === 0 ? '' : unique.map((p) => Buffer.from(p, 'latin1')).join('\0') + '\0';
+fs.writeFileSync(process.argv[3], out);
+NODE
   printf 'PATH LEAK: scan-failed (candidate de-duplication error)\n' >&2
   exit 2
 }

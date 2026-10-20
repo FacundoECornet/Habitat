@@ -221,6 +221,9 @@ remote_preflight() {
 remote_preflight
 
 # --- NUL-safe drift accounting for a directory entry ------------------------
+# File size in bytes, portable: BSD `stat` (macOS) does not understand `-c`.
+file_size() { wc -c < "$1" 2>/dev/null | tr -d '[:space:]'; }
+
 # Compares a manifest-filtered source snapshot against the destination tree by
 # relative path, content checksum, and executable bit. Prints
 # "<added> <changed> <removed> <signed-delta-bytes>"
@@ -386,14 +389,14 @@ if [ "$DRY_RUN" -eq 1 ]; then
       if [ "$type" = "file" ]; then
         if [ ! -e "$dst" ]; then
           added=1
-          delta="$(stat -c %s "$src")"
+          delta="$(file_size "$src")"
         elif cmp -s "$src" "$dst"; then
           if [ -x "$src" ] && [ ! -x "$dst" ] || [ ! -x "$src" ] && [ -x "$dst" ]; then
             changed=1
           fi
         else
           changed=1
-          delta=$(( $(stat -c %s "$src") - $(stat -c %s "$dst") ))
+          delta=$(( $(file_size "$src") - $(file_size "$dst") ))
         fi
       else
         stage="$work/stage.$idx"
