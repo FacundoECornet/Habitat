@@ -196,7 +196,8 @@ Etapa 1 cerrada: restore, verificación, captura, GSD, skills y plugins funciona
 Linux, macOS y WSL. Lo que sigue está en el [CHANGELOG](CHANGELOG.md) y en los issues abiertos.
 
 Evidencia de instalación sobre un clone nuevo del repo público, sin credenciales:
-[`docs/EVIDENCE-LINUX.md`](docs/EVIDENCE-LINUX.md).
+[`docs/EVIDENCE-LINUX.md`](docs/EVIDENCE-LINUX.md) (Linux/WSL) y
+[`docs/EVIDENCE-WINDOWS.md`](docs/EVIDENCE-WINDOWS.md) (Windows nativo, PowerShell).
 
 ## Licencia y contribución
 

@@ -51,8 +51,15 @@ foreach ($tool in @('node', 'npm', 'git')) {
 }
 
 $nodeVersion = (& node -p "process.versions.node").Trim()
-$nodeMajor = [int]($nodeVersion.Split('.')[0])
-if ($nodeMajor -notin @(22, 24, 26)) {
+$nodeParts = $nodeVersion.Split('.')
+$nodeMajor = [int]$nodeParts[0]
+$nodeMinor = if ($nodeParts.Length -gt 1) { [int]$nodeParts[1] } else { 0 }
+# Documented minimums: 22.22.2+, 24.15+ or 26+. A major below those is not
+# supported at all; a lower minor inside a supported major only gets a warning.
+$minimums = @{ 22 = 22; 24 = 15; 26 = 0 }
+if (-not $minimums.ContainsKey($nodeMajor)) {
+  Write-Host "bootstrap: aviso - Node $nodeVersion no está entre las versiones soportadas (22.22.2+, 24.15+ o 26+)." -ForegroundColor Yellow
+} elseif ($nodeMinor -lt $minimums[$nodeMajor]) {
   Write-Host "bootstrap: aviso - Node $nodeVersion detectado; Habitat espera 22.22.2+, 24.15+ o 26+." -ForegroundColor Yellow
 }
 Write-Host "bootstrap: node $nodeVersion"

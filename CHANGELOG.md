@@ -4,6 +4,34 @@ Todas las novedades de Habitat se registran acá, siguiendo
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.1.2] - 2026-10-20
+
+Correcciones encontradas al probar el flujo **Windows nativo** (PowerShell + Node + Git) sobre
+un clone nuevo del repo público.
+
+### Corregido
+
+- **`verify`aba una CLI opcional ausente.** En Windows la sonda de CLIs pasa por `cmd.exe`, así
+  que un binario no instalado devolvía exit 1 en lugar de ENOENT: `gsd-sdk` o `graphify`
+  ausentes se reportaban como ROTOS y `bootstrap.ps1` fallaba su propia verificación. Ahora
+  se resuelven en PATH (`lib/exec-path.mjs`) y "no instalado" se informa en verde, con el
+  hint de `install.mjs --with-deps`.
+- **El check `cli-tools-installed` eliminaba.** Repetía la misma condición como falla, así que
+  instalar sin `--with-deps` era imposible. Ahora hay un único check, en verde, con la lista
+  de CLIs ausentes.
+- **`~/bin/restore` instalado estaba roto.** Solo se copiaban tres módulos de `lib/`; ahora
+  viaja **todo** `lib/` junto a los binarios, así que ningún comando instalado muere con
+  `ERR_MODULE_NOT_FOUND`.
+- **`bootstrap.ps1` compara la versión de Node completa** (22.22.2+, 24.15+ o 26+) y avisa
+  cuando el minor queda por debajo del mínimo documentado.
+
+### Agregado
+
+- `docs/EVIDENCE-WINDOWS.md`: evidencia fechada del flujo Windows nativo completo
+  (`bootstrap.ps1 -WithDeps -WithGsd`, verify, `npm.cmd test`) sobre un clone nuevo.
+- Tests nuevos: resolución de ejecutables por plataforma, check `cli-tools` sin CLIs opcionales
+  y binarios instalados autocontenidos.
+
 ## [0.1.1] - 2026-10-20
 
 Ajustes sobre la publicación inicial.
@@ -57,5 +85,6 @@ previos ya no son válidos: hay que volver a clonarlo.
 git clone https://github.com/FacundoECornet/Habitat.git ~/code/habitat
 ```
 
+[0.1.2]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.1.2
 [0.1.1]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.1.1
 [0.1.0]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.1.0
