@@ -62,3 +62,157 @@ jobs:
 
       - name: Hook syntax
         run: bash -n .githooks/pre-commit
+
+  # Windows is a supported platform (PowerShell, no WSL): the engine is plain
+  # Node, so this job proves the install and the verification work natively.
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix home/.config/opencode --no-audit --no-fund
+
+      - name: Tests
+        run: npm test
+
+      - name: Manifest contract
+        run: bash scripts/validate-manifest.sh
+
+      - name: Path leak scan
+        run: bash scripts/check-path-leaks.sh
+
+      - name: Payload has no symlinks
+        run: node -e "const{execFileSync}=require('node:child_process');const out=execFileSync('git',['ls-files','-s','home'],{encoding:'utf8'});const links=out.split('\n').filter((l)=>l.startsWith('120000 ')).map((l)=>l.split('\t')[1]);if(links.length){console.error('::error::the payload ships symlinks');console.error(links.join('\n'));process.exit(1)}console.log('no symlinks in the payload')"
+
+      - name: Hook syntax
+        run: bash -n .githooks/pre-commit
+
+      - name: Install and verify
+        shell: pwsh
+        run: |
+          # The test home lives outside the repository: restoring the payload
+          # over the checkout itself would copy the tree onto itself.
+          $home = Join-Path $env:RUNNER_TEMP 'habitat-home'
+          New-Item -ItemType Directory -Force $home | Out-Null
+          node tools/install.mjs --home $home --repo . --no-pick-models
+          if ($LASTEXITCODE -ne 0) { throw "install failed with $LASTEXITCODE" }
+          node tools/verify.mjs --home $home --repo . --no-models --no-cli
+          if ($LASTEXITCODE -ne 0) { throw "verify failed with $LASTEXITCODE" }
+
+  # macOS is advertised in the README, so it is proved here and not assumed:
+  # the Bash tooling (capture, path scan) has to work with the BSD tools that
+  # macOS ships, not only with GNU coreutils.
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix home/.config/opencode --no-audit --no-fund
+
+      - name: Tests
+        run: npm test
+
+      - name: Manifest contract
+        run: bash scripts/validate-manifest.sh
+
+      - name: Path leak scan
+        run: bash scripts/check-path-leaks.sh
+
+      - name: Payload has no symlinks
+        run: |
+          symlinks=$(git ls-files -s home | awk '$1 == "120000" { print $4 }')
+          if [ -n "$symlinks" ]; then
+            echo "::error::the payload ships symlinks; they are never followed, but they must not ship"
+            echo "$symlinks"
+            exit 1
+          fi
+          echo "no symlinks in the payload"
+
+      - name: Hook syntax
+        run: bash -n .githooks/pre-commit
+
+      - name: Install and verify
+        run: |
+          # The test home lives outside the repository: restoring the payload
+          # over the checkout itself would copy the tree onto itself.
+          home="$RUNNER_TEMP/habitat-home"
+          mkdir -p "$home"
+          node tools/install.mjs --home "$home" --repo . --no-pick-models
+          node tools/verify.mjs --home "$home" --repo . --no-models --no-cli
+
+  # OpenCode retires model ids over time. When that happens the install of
+  # every user fails, so the catalog is checked weekly and an issue is opened
+  # with the exact list of affected agents and profiles.
+  #
+  # The check needs the OpenCode Zen credential to see the complete catalog:
+  # without it, the public listing still advertises models OpenCode already
+  # retired. Set the repository secret OPENCODE_ZEN_KEY to enable it.
+  model-catalog:
+    name: Model catalog
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Install the OpenCode CLI
+        run: npm install -g opencode-ai@1.19.3
+
+      - name: Authenticate
+        env:
+          OPENCODE_ZEN_KEY: ${{ secrets.OPENCODE_ZEN_KEY }}
+        run: |
+          if [ -n "$OPENCODE_ZEN_KEY" ]; then
+            mkdir -p "$HOME/.local/share/opencode"
+            printf '{"opencode":{"type":"api","key":"%s"}}' "$OPENCODE_ZEN_KEY" > "$HOME/.local/share/opencode/auth.json"
+            echo "credential configured"
+          else
+            echo "::warning::no OPENCODE_ZEN_KEY secret: the public catalog cannot detect retired ids, so this run only reports what it can see"
+          fi
+
+      - name: Check the catalog
+        id: check
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node tools/check-model-ids.mjs | tee model-report.txt
+
+      - name: Open or update the issue
+        if: steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          number=$(gh issue list --state open --search 'Modelos retirados del catalogo in:title' --json number --jq '.[0].number')
+          if [ -n "$number" ] && [ "$number" != "null" ]; then
+            gh issue comment "$number" --body-file model-report.txt
+          else
+            gh issue create --title "Modelos retirados del catalogo de OpenCode" --body-file model-report.txt
+          fi
