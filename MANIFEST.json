@@ -29,7 +29,8 @@
         "sessions/",
         "gsd-router.backup/",
         "gsd-install-state.json",
-        "backup-*"
+        "backup-*",
+        "gsd-pristine/"
       ],
       "post_steps": [
         "npm ci"

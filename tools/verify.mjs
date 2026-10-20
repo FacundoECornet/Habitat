@@ -118,11 +118,16 @@ function checkPortablePaths(home) {
   const ownHome = path.resolve(home).replace(/\\/g, "/").toLowerCase();
   const foreignHome = /\/home\/[A-Za-z_][^/\s"'`)]*/g;
   const hits = [];
+  // Vendor-managed copies and stale backups are not payload: they are written
+  // by other tools (the GSD installer keeps a pristine copy) and never
+  // restored by Habitat, so they must not fail this check.
+  const ignored = /^(gsd-pristine|[^/]*\.bak-[^/]*|[^/]*\.backup-[^/]*)$/;
   const stack = [root];
   while (stack.length && hits.length < 20) {
     const dir = stack.pop();
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.name === "node_modules") continue;
+      if (ignored.test(entry.name)) continue;
       const abs = path.join(dir, entry.name);
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) { stack.push(abs); continue; }

@@ -92,7 +92,7 @@ const REQUIRED_EXCLUDES = [
 
 // Per-origin extras (Phase 3 Option-A runtime exclusions, decisions 03-03).
 const REQUIRED_EXCLUDES_BY_ORIGIN = new Map([
-  ['.config/opencode', ['bin/', 'sessions/', 'gsd-router.backup/', 'backup-*', 'gsd-install-state.json']],
+  ['.config/opencode', ['bin/', 'sessions/', 'gsd-router.backup/', 'backup-*', 'gsd-install-state.json', 'gsd-pristine/']],
   ['.claude/skills', ['bin/']],
   ['.gsd', ['bin/']]
 ]);
