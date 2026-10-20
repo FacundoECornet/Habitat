@@ -1,4 +1,4 @@
-# .gitignore — Git ignore backstop for MANIFEST.json exclusions (D-07/D-08/D-10/D-14/D-15)
+# .gitignore — Git ignore backstop for MANIFEST.json exclusions
 #
 # Second layer ONLY: the primary structural denylist lives in MANIFEST.json
 # (`excludes` per entry) and is consumed by capture (Phase 2). These rules stop

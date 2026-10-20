@@ -1,33 +1,33 @@
 #!/usr/bin/env bash
-# lib/secret-scan.sh — shared fragment-built secret detector (D-04/D-10)
+# lib/secret-scan.sh — shared fragment-built secret detector
 #
 # Purpose:
-#   The single definition of habitat's five secret-signature classes, shared by
-#   the staged-commit gate (.githooks/pre-commit) and, going forward, capture's
-#   source-side pre-scan and post-copy gate. One fragment-built source means the
-#   consumers cannot drift and neither this library nor its callers self-matches
-#   its own detector (Phase 1 D-09; Phase 2 D-04/D-10).
+# The single definition of habitat's five secret-signature classes, shared by
+# the staged-commit gate (.githooks/pre-commit) and, going forward, capture's
+# source-side pre-scan and post-copy gate. One fragment-built source means the
+# consumers cannot drift and neither this library nor its callers self-matches
+# its own detector (Phase 1 ; Phase 2 ).
 #
 # Public API:
-#   RULE_NAMES[]                     — the five stable rule labels.
-#   RULE_ERES[]                      — the matching ERE per label (same order).
-#   secret_scan_content PATH CONTENT [ALLOWLIST_FUNCTION]
-#                                    — scan one blob's text; ALLOWLIST_FUNCTION
-#                                      PATH TEXT returns 0 to suppress a hit.
-#   secret_scan_tree ROOT [ALLOWLIST_FUNCTION]
-#                                    — NUL-safe walk of a physical tree; scans
-#                                      every regular file, never follows symlinks.
-#   SECRET_SCAN_BLOCKED              — 0 clean so far, 1 once any finding or
-#                                      scan error has been reported.
-#   secret_report RULE PATH LINE     — the default reporter (rule/path/line only);
-#                                      consumers may override it before scanning.
+# RULE_NAMES[]                     — the five stable rule labels.
+# RULE_ERES[]                      — the matching ERE per label (same order).
+# secret_scan_content PATH CONTENT [ALLOWLIST_FUNCTION]
+# — scan one blob's text; ALLOWLIST_FUNCTION
+# PATH TEXT returns 0 to suppress a hit.
+# secret_scan_tree ROOT [ALLOWLIST_FUNCTION]
+# — NUL-safe walk of a physical tree; scans
+# every regular file, never follows symlinks.
+# SECRET_SCAN_BLOCKED              — 0 clean so far, 1 once any finding or
+# scan error has been reported.
+# secret_report RULE PATH LINE     — the default reporter (rule/path/line only);
+# consumers may override it before scanning.
 #
 # Fail-closed policy:
-#   grep status 0 is a hit (block); status 1 alone is clean; any other status,
-#   an unreadable blob, or an enumeration error reports `scan-failed` and blocks.
+# grep status 0 is a hit (block); status 1 alone is clean; any other status,
+# an unreadable blob, or an enumeration error reports `scan-failed` and blocks.
 #
 # Redaction:
-#   Diagnostics carry ONLY rule, path, and line. Matched bytes are never printed.
+# Diagnostics carry ONLY rule, path, and line. Matched bytes are never printed.
 #
 # NOTE: `set -e` is deliberately omitted — grep exit statuses are handled
 # explicitly. Sourcing this file only defines arrays and functions.

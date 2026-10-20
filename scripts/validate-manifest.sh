@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# validate-manifest.sh — strict copy-only manifest contract validator (D-01..D-06)
+# validate-manifest.sh — strict copy-only manifest contract validator
 #
 # Usage: scripts/validate-manifest.sh [manifest-path]
-#   With no argument, validates <repo-root>/MANIFEST.json.
+# With no argument, validates <repo-root>/MANIFEST.json.
 #
 # Fail-closed: exits nonzero with a named diagnostic (`INVALID: <code>`) on any
 # contract violation. Accepts only a syntactically valid JSON manifest whose
-# entries match the exact six-entry D-06 allowlist with copy-only mode.
+# entries match the exact six-entry allowlist with copy-only mode.
 #
 # Zero dependencies beyond Bash and Node.js built-ins (no jq, no packages).
 
@@ -70,7 +70,7 @@ if (typeof doc.generated !== 'string' || !rfc3339.test(doc.generated)) {
 }
 
 if (!Array.isArray(doc.entries)) invalid('manifest-entries-type', 'entries must be an array');
-// D-06 allowlist: exact origin -> dest mapping.
+// allowlist: exact origin -> dest mapping.
 const ALLOWLIST = new Map([
   ['.config/opencode', 'home/.config/opencode'],
   ['.claude/skills', 'home/.claude/skills'],
@@ -83,7 +83,7 @@ if (doc.entries.length !== ALLOWLIST.size) {
   invalid('manifest-entry-count', 'entries must contain exactly ' + ALLOWLIST.size + ' roots (got ' + doc.entries.length + ')');
 }
 
-// Every entry must declare the full structural denylist (D-07/D-08/D-10).
+// Every entry must declare the full structural denylist.
 const REQUIRED_EXCLUDES = [
   'node_modules/', '*.tar.gz', '*.tgz', '*.tar', '*.zip', '*.bak*',
   '*.backup-*',
@@ -147,7 +147,7 @@ doc.entries.forEach(function (entry, i) {
   seenDest.add(dest);
 
   if (!ALLOWLIST.has(origin)) {
-    invalid('manifest-unknown-root', where + '.origin is outside the D-06 allowlist: ' + JSON.stringify(origin));
+    invalid('manifest-unknown-root', where + '.origin is outside the allowlist: ' + JSON.stringify(origin));
   }
   if (ALLOWLIST.get(origin) !== dest) {
     invalid('manifest-dest-mismatch', where + '.dest must be ' + JSON.stringify(ALLOWLIST.get(origin)) + ' for origin ' + JSON.stringify(origin));
@@ -177,7 +177,7 @@ doc.entries.forEach(function (entry, i) {
 });
 
 const missing = Array.from(ALLOWLIST.keys()).filter(function (o) { return !seenOrigin.has(o); });
-if (missing.length > 0) invalid('manifest-missing-root', 'missing required D-06 roots: ' + missing.join(', '));
+if (missing.length > 0) invalid('manifest-missing-root', 'missing required roots: ' + missing.join(', '));
 
 process.stdout.write('VALID: ' + doc.entries.length + ' entries\n');
 process.exit(0);

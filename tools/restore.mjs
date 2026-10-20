@@ -1,22 +1,26 @@
 // tools/restore.mjs — manifest-driven, fail-closed, idempotent $HOME restore
 //
-// The single cross-platform restore engine (D-01). `scripts/restore.sh` is a
+// The single cross-platform restore engine. `scripts/restore.sh` is a
 // thin shim that execs this file; `tools/install.mjs` invokes it directly with
 // the Node runtime. It needs only Node.js built-ins (no Bash, rsync, sha256sum,
 // git nor a NUL token stream), so it runs natively on Windows.
 //
-// Contract preserved verbatim from the Bash original:
-//   D-01 sibling .backup-YYYYMMDD-HHMMSS    D-02 checksum + exec bit only
-//   D-03 stdout + persistent log            D-04 backup exact blocker, no follow
-//   D-05 no-op rerun summary                D-06 read-only dry-run 0/1 contract
-//   D-07 equality matches capture           D-08 accumulate failures
-//   D-09 conditional npm ci                 D-10 files first, npm failure continues
-//   D-11 never copy node_modules            D-12 missing node/npm fail-closed
-//   D-13 skip machine-local (*.local)       D-14 preserve orphans, no destructive delete
-//   D-15 mkdir parents, exec bit only       D-16 fail-closed preflight, no /mnt/c drvfs
+// Contract preserved from the original Bash implementation:
+// - sibling .backup-YYYYMMDD-HHMMSS backups
+// - stdout plus a persistent log
+// - no-op rerun summary
+// - read-only dry-run with its own exit contract
+// - failures accumulate instead of aborting early
+// - files first, a failing npm step does not stop the copy
+// - node_modules is never copied
+// - missing node/npm fails closed
+// - machine-local files (*.local) are skipped
+// - orphans are preserved, nothing is destructively deleted
+// - only the parent directories are created, and only the exec bit is set
+// - fail-closed preflight: no /mnt/c drvfs, no WSL share
 //
 // Usage:
-//   node tools/restore.mjs [--dry-run] [--verify] [--no-models] [--no-cli]
+// node tools/restore.mjs [--dry-run] [--verify] [--no-models] [--no-cli]
 
 import fs from "node:fs";
 import path from "node:path";
@@ -57,10 +61,10 @@ for (const arg of process.argv.slice(2)) {
   }
 }
 
-// --- resolve $HOME (D-16) ---------------------------------------------------
+// --- resolve $HOME ---------------------------------------------------
 const HOME = process.env.HOME;
 if (!HOME) {
-  err("restore: home-unset — HOME must point at the live ecosystem root (D-16)");
+  err("restore: home-unset — HOME must point at the live ecosystem root");
   process.exit(2);
 }
 
@@ -80,24 +84,24 @@ function resolveHome() {
 }
 const homeReal = resolveHome();
 if (!homeReal) {
-  err("restore: home-unresolved (cannot canonicalize HOME: " + HOME + ") (D-16)");
+  err("restore: home-unresolved (cannot canonicalize HOME: " + HOME + ")");
   process.exit(2);
 }
 
 // Reject a live root sitting on a Windows mount or WSL share: a drvfs/UNC home
 // breaks the executable bit, the case-folded boundary and the backup renames
-// (D-16). Normalize separators so both POSIX and win32 spellings are caught.
+//. Normalize separators so both POSIX and win32 spellings are caught.
 const homeNorm = homeReal.replace(/\\/g, "/").toLowerCase();
 if (homeNorm === "/mnt/c" || homeNorm.startsWith("/mnt/c/")) {
-  err("restore: home-on-drvfs (" + homeReal + ") — refusing before any write (D-16)");
+  err("restore: home-on-drvfs (" + homeReal + ") — refusing before any write");
   process.exit(2);
 }
 if (homeNorm.startsWith("//wsl$/") || homeNorm.startsWith("//wsl.localhost/")) {
-  err("restore: home-on-wsl-share (" + homeReal + ") — usá un home nativo, no \\\\wsl$ (D-16)");
+  err("restore: home-on-wsl-share (" + homeReal + ") — usá un home nativo, no \\\\wsl$");
   process.exit(2);
 }
 
-// --- strict validator before any persistent mutation (D-16) -----------------
+// --- strict validator before any persistent mutation -----------------
 const manifestPath = path.join(repoRoot, "MANIFEST.json");
 let entries;
 try {
@@ -108,7 +112,7 @@ try {
   } else {
     err("INVALID: manifest-read — " + (e && e.message ? e.message : String(e)));
   }
-  err("restore: manifest-invalid — refusing before any write (D-16)");
+  err("restore: manifest-invalid — refusing before any write");
   process.exit(2);
 }
 
@@ -149,13 +153,13 @@ for (const entry of entries) {
   } else if (st && st.isFile()) {
     srcTypes.push("file");
   } else {
-    err("restore: origin-missing (" + entry.dest + ") — refusing before any write (D-16)");
+    err("restore: origin-missing (" + entry.dest + ") — refusing before any write");
     srcTypes.push("missing");
     preflightProblems += 1;
     continue;
   }
   try { fs.accessSync(src, fs.constants.R_OK); } catch {
-    err("restore: origin-unreadable (" + entry.dest + ") — refusing before any write (D-16)");
+    err("restore: origin-unreadable (" + entry.dest + ") — refusing before any write");
     preflightProblems += 1;
   }
 }
@@ -164,28 +168,28 @@ if (preflightProblems !== 0) {
   process.exit(2);
 }
 
-// --- persistent log (real run only; never in dry-run) (D-03) ----------------
+// --- persistent log (real run only; never in dry-run) ----------------
 const habitatDir = path.join(HOME, ".habitat");
 const logFile = path.join(habitatDir, "restore.log");
 if (!DRY_RUN) {
   let hst = null;
   try { hst = fs.lstatSync(habitatDir); } catch { hst = null; }
   if (hst && hst.isSymbolicLink()) {
-    err("restore: log-unwritable (" + habitatDir + " is a symlink) — refusing before replacement (D-03)");
+    err("restore: log-unwritable (" + habitatDir + " is a symlink) — refusing before replacement");
     process.exit(2);
   }
   try { fs.mkdirSync(habitatDir, { recursive: true }); } catch {
-    err("restore: log-unwritable (cannot create " + habitatDir + ") (D-03)");
+    err("restore: log-unwritable (cannot create " + habitatDir + ")");
     process.exit(2);
   }
   let lst = null;
   try { lst = fs.lstatSync(logFile); } catch { lst = null; }
   if (lst && lst.isSymbolicLink()) {
-    err("restore: log-unwritable (" + logFile + " is a symlink) — refusing before replacement (D-03)");
+    err("restore: log-unwritable (" + logFile + " is a symlink) — refusing before replacement");
     process.exit(2);
   }
   try { fs.appendFileSync(logFile, ""); } catch {
-    err("restore: log-unwritable (" + logFile + ") — refusing before replacement (D-03)");
+    err("restore: log-unwritable (" + logFile + ") — refusing before replacement");
     process.exit(2);
   }
 }
@@ -247,7 +251,7 @@ function logLine(s) {
   fs.appendFileSync(logFile, ts + " " + shellQuote(s) + "\n");
 }
 
-// --- equality: full content checksum + executable bit only (D-02/D-07) ------
+// --- equality: full content checksum + executable bit only ------
 // The payload stores __HABITAT_HOME__ tokens; the destination holds the
 // expanded text, so the source side is hashed after expansion (same bytes that
 // would be written). A placeholder-free file is hashed as-is.
@@ -324,7 +328,7 @@ function machineLocal(rel) {
   return rel.split("/").some((c) => c.endsWith(".local"));
 }
 
-// --- per-entry mutation action log (CR-01 rollback) --------------------------
+// --- per-entry mutation action log ( rollback) --------------------------
 let ENTRY_KIND = [];
 let ENTRY_ARG = [];
 function entryActReset() { ENTRY_KIND = []; ENTRY_ARG = []; }
@@ -341,7 +345,7 @@ function rollbackEntry() {
       const from = arg.slice(0, idx);
       const to = arg.slice(idx + 1);
       if (exists(from)) {
-        recordFailure("restore: rollback-occupied (" + from + ") — backup kept at " + to + " (CR-01)");
+        recordFailure("restore: rollback-occupied (" + from + ") — backup kept at " + to + "");
         problems += 1;
       } else if (exists(to)) {
         try {
@@ -349,16 +353,16 @@ function rollbackEntry() {
           out("restore: rollback (" + shellQuote(to) + " -> " + shellQuote(from) + ")");
           logLine("rollback " + to + " -> " + from);
         } catch {
-          recordFailure("restore: rollback-failed (" + to + " -> " + from + ") (CR-01)");
+          recordFailure("restore: rollback-failed (" + to + " -> " + from + ")");
           problems += 1;
         }
       } else {
-        recordFailure("restore: rollback-missing (" + to + ") (CR-01)");
+        recordFailure("restore: rollback-missing (" + to + ")");
         problems += 1;
       }
     } else if (kind === "mkdir") {
       try { fs.rmdirSync(arg); } catch {
-        recordFailure("restore: rollback-dir-nonempty (" + arg + ") (CR-01)");
+        recordFailure("restore: rollback-dir-nonempty (" + arg + ")");
         problems += 1;
       }
     }
@@ -367,11 +371,11 @@ function rollbackEntry() {
   return problems === 0;
 }
 
-// --- backup an exact blocker to a per-run sibling name (D-01/D-04) ----------
+// --- backup an exact blocker to a per-run sibling name ----------
 function backupPath(target) {
   const b = target + ".backup-" + STAMP;
   if (exists(b)) {
-    recordFailure("restore: backup-collision (" + b + " exists) — refusing to overwrite (D-01)");
+    recordFailure("restore: backup-collision (" + b + " exists) — refusing to overwrite");
     return false;
   }
   try {
@@ -466,7 +470,7 @@ function inspectDry(s, d) {
   return true;
 }
 
-// --- walk a payload root: files + directories, no symlinks (CR-02) ----------
+// --- walk a payload root: files + directories, no symlinks ----------
 function walkRoot(root) {
   const acc = [];
   const stack = [{ dir: root, rel: "" }];
@@ -488,7 +492,7 @@ function walkRoot(root) {
   return acc;
 }
 
-// --- real-run: copy a directory entry, preserving orphans (D-14) ------------
+// --- real-run: copy a directory entry, preserving orphans ------------
 function entryDirReal(src, dstDir, patterns) {
   if (!ensureDir(dstDir)) return false;
   let list;
@@ -515,14 +519,14 @@ function entryDirReal(src, dstDir, patterns) {
 
   if (aborted) {
     if (rollbackEntry()) {
-      recordFailure("restore: entry-blocked (" + dstDir + ") — backup refused; destination left untouched (D-01/D-04)");
+      recordFailure("restore: entry-blocked (" + dstDir + ") — backup refused; destination left untouched");
     } else {
-      recordFailure("restore: entry-blocked (" + dstDir + ") — backup refused; rollback incomplete, see diagnostics (D-01/D-04/CR-01)");
+      recordFailure("restore: entry-blocked (" + dstDir + ") — backup refused; rollback incomplete, see diagnostics");
     }
     return false;
   }
 
-  // D-15: transfer bytes for added/changed files (a checksum-equal destination
+  // : transfer bytes for added/changed files (a checksum-equal destination
   // was left in place above), then apply only the source executable bit so a
   // checksum-equal destination keeps its other permission bits.
   for (const item of list) {
@@ -580,7 +584,7 @@ function entryFileReal(src, dst) {
   if (!inspectReal(src, dst)) { rollbackEntry(); return false; }
   // Only transfer when the destination is absent (added, or a changed/blocking
   // destination was backed up). A checksum-equal destination is left untouched
-  // so its other permission bits survive (D-15/CR-03).
+  // so its other permission bits survive.
   if (!exists(dst)) {
     try {
       writeMaterialized(src, dst);
@@ -597,7 +601,7 @@ function entryFileReal(src, dst) {
   return true;
 }
 
-// --- npm staleness fingerprint (D-09/D-11) ----------------------------------
+// --- npm staleness fingerprint ----------------------------------
 function npmDigest(pkg, lock) {
   const h = crypto.createHash("sha256");
   for (const p of [pkg, lock]) {
@@ -662,11 +666,11 @@ function npmGate(destDir, dest) {
 
   const npm = whichBin("npm");
   if (!npm) {
-    recordFailure("restore: npm required (" + dest + ") — install Node.js/npm and retry (D-12)");
+    recordFailure("restore: npm required (" + dest + ") — install Node.js/npm and retry");
     return;
   }
   if (!fileExists(pkg) || !lock) {
-    recordFailure("restore: npm-inputs-missing (" + dest + ") — package.json and package-lock.json are required (D-09)");
+    recordFailure("restore: npm-inputs-missing (" + dest + ") — package.json and package-lock.json are required");
     return;
   }
   // win32: whichBin resolves a full shim path (often "C:\Program Files\...\npm")
@@ -701,10 +705,10 @@ function npmGate(destDir, dest) {
   } else if (certificateFailure) {
     recordFailure(
       "restore: npm-failed (" + dest + ") — la red intercepta TLS y el almacén de CA del sistema no incluye la CA corporativa; " +
-        "instalá la CA corporativa en el sistema o exportá NODE_EXTRA_CA_CERTS=/ruta/ca.crt y repetí (D-10)",
+        "instalá la CA corporativa en el sistema o exportá NODE_EXTRA_CA_CERTS=/ruta/ca.crt y repetí",
     );
   } else {
-    recordFailure("restore: npm-failed (" + dest + ") — retry npm ci by hand (D-10)");
+    recordFailure("restore: npm-failed (" + dest + ") — retry npm ci by hand");
   }
 }
 
@@ -770,9 +774,9 @@ function processEntry(idx) {
   totalSkipped += ENT_SKIPPED;
 }
 
-// ================= dry-run: read-only preview (D-06) ========================
+// ================= dry-run: read-only preview ========================
 if (DRY_RUN) {
-  out("restore: dry-run — read-only preview (D-06)");
+  out("restore: dry-run — read-only preview");
   for (let idx = 0; idx < entries.length; idx++) processEntry(idx);
   out("restore: total added=" + totalAdded + " changed=" + totalChanged + " skipped=" + totalSkipped + " backups=" + totalBackup);
   if (!actionNeeded) { out("restore: converged"); process.exit(0); }

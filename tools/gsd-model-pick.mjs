@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Interactive and scriptable editor for GSD model profile matrices (F-14).
+// Interactive and scriptable editor for GSD model profile matrices.
 
 import fs from "node:fs";
 import os from "node:os";

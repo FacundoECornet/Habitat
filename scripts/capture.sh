@@ -2,42 +2,45 @@
 # capture.sh — manifest-driven capture, drift preview, read-only remote preflight
 #
 # What it does:
-#   Reads MANIFEST.json through the shared lib/manifest.sh reader (D-10), runs
-#   the strict manifest validator first, preflights every live origin, then
-#   mirrors each approved root into a restrictive same-filesystem staged
-#   candidate tree with rsync. The candidate is scanned by the shared secret
-#   detector (lib/secret-scan.sh) and the physical-tree path scanner
-#   (scripts/check-path-leaks.sh --tree) BEFORE the live repo `home/` is touched;
-#   only the exact scanned candidate bytes are promoted (D-03). The published
-#   `home/` is scanned again as a second gate, and any finding, scan error, or
-#   promotion failure restores the complete prior `home/` tree (D-04). With
-#   `--dry-run` it writes nothing and instead prints a per-entry drift report
-#   (added/changed/removed regular-file counts + signed net byte delta + the
-#   rsync itemized listing) and exits nonzero when drift exists (D-05/D-06).
+# Reads MANIFEST.json through the shared lib/manifest.sh reader, runs
+# the strict manifest validator first, preflights every live origin, then
+# mirrors each approved root into a restrictive same-filesystem staged
+# candidate tree with rsync. The candidate is scanned by the shared secret
+# detector (lib/secret-scan.sh) and the physical-tree path scanner
+# (scripts/check-path-leaks.sh --tree) BEFORE the live repo `home/` is touched;
+# only the exact scanned candidate bytes are promoted. The published
+# `home/` is scanned again as a second gate, and any finding, scan error, or
+# promotion failure restores the complete prior `home/` tree. With
+# `--dry-run` it writes nothing and instead prints a per-entry drift report
+# (added/changed/removed regular-file counts + signed net byte delta + the
+# rsync itemized listing) and exits nonzero when drift exists.
 #
 # Front-door decisions honored:
-#   D-01 exact mirror per entry (rsync --delete)      D-02 refuse on any bad origin
-#   D-03 pre-scan staged bytes before writing         D-04 post-copy physical re-scan
-#   D-05 dry-run report                               D-06 dry-run exit contract
-#   D-07 rsync required, no cp -a fallback            D-08 read-only remote preflight
-#   D-09 payload only — never stage/commit/push       D-10 shared manifest parser
+# - exact mirror per entry (rsync --delete), refusing any bad origin
+# - staged bytes are scanned before writing, and the physical tree is
+# scanned again after the copy
+# - dry-run prints a drift report and returns its own exit contract
+# - rsync is required, there is no cp -a fallback
+# - the remote preflight is read-only
+# - only the payload is written: never stage, commit or push
+# - the manifest is read through the shared parser
 #
 # Fail-closed policy:
-#   Only a fully validated manifest and every readable origin reach rsync.
-#   Every refusal prints a named `capture: <code> (...)` diagnostic to stderr
-#   and exits nonzero BEFORE any payload mutation or deletion.
+# Only a fully validated manifest and every readable origin reach rsync.
+# Every refusal prints a named `capture: <code> (...)` diagnostic to stderr
+# and exits nonzero BEFORE any payload mutation or deletion.
 #
 # Scan scope:
-#   Diagnostics describe tested detector coverage (the five shared secret rules
-#   and the two absolute-path families), not exhaustive credential discovery.
+# Diagnostics describe tested detector coverage (the five shared secret rules
+# and the two absolute-path families), not exhaustive credential discovery.
 #
 # Safety:
-#   Capture writes only the manifest destinations, published as a whole scanned
-#   `home/` tree. It never runs `git add`, `git commit`, `git push`, or any
-#   remote-mutating command.
+# Capture writes only the manifest destinations, published as a whole scanned
+# `home/` tree. It never runs `git add`, `git commit`, `git push`, or any
+# remote-mutating command.
 #
 # Usage:
-#   scripts/capture.sh [--dry-run]
+# scripts/capture.sh [--dry-run]
 #
 # NOTE: `set -e` is deliberately omitted — rsync and read exit statuses are
 # handled explicitly. Only `set -u` and `set -o pipefail` are enabled.
@@ -63,70 +66,70 @@ done
 
 # --- required runtime -------------------------------------------------------
 [ -n "${BASH_VERSION:-}" ] || {
-  printf 'capture: bash-required (D-07)\n' >&2
+  printf 'capture: bash-required\n' >&2
   exit 2
 }
 for tool in git node rsync; do
   command -v "$tool" >/dev/null 2>&1 || {
     case "$tool" in
-      rsync) printf 'capture: rsync required (D-07) — install rsync (e.g. sudo apt install rsync) and retry\n' >&2 ;;
-      node)  printf 'capture: node required (manifest parser, D-10) — install Node.js and retry\n' >&2 ;;
-      git)   printf 'capture: git required (repository root + remote report, D-08) — install Git and retry\n' >&2 ;;
+      rsync) printf 'capture: rsync required — install rsync (e.g. sudo apt install rsync) and retry\n' >&2 ;;
+      node)  printf 'capture: node required (manifest parser) — install Node.js and retry\n' >&2 ;;
+      git)   printf 'capture: git required (repository root + remote report) — install Git and retry\n' >&2 ;;
     esac
     exit 2
   }
 done
 
-# --- resolve repository root (script location / Git, D-10) ------------------
+# --- resolve repository root (script location / Git) ------------------
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null || true)"
 [ -n "$repo_root" ] || repo_root="$(cd "$script_dir/.." && pwd)"
 manifest_path="$repo_root/MANIFEST.json"
 
 [ -n "${HOME:-}" ] || {
-  printf 'capture: home-unset (D-02) — HOME must point at the live ecosystem root\n' >&2
+  printf 'capture: home-unset — HOME must point at the live ecosystem root\n' >&2
   exit 2
 }
 
-# --- run the strict manifest validator before parsing or mutation (D-10) ----
+# --- run the strict manifest validator before parsing or mutation ----
 validator="$script_dir/validate-manifest.sh"
 [ -f "$validator" ] || {
-  printf 'capture: validator-missing (expected scripts/validate-manifest.sh, D-10)\n' >&2
+  printf 'capture: validator-missing (expected scripts/validate-manifest.sh)\n' >&2
   exit 2
 }
 if ! bash "$validator" "$manifest_path"; then
-  printf 'capture: manifest-invalid (D-10) — refusing before any copy or delete\n' >&2
+  printf 'capture: manifest-invalid — refusing before any copy or delete\n' >&2
   exit 2
 fi
 
-# --- consume the shared manifest reader (D-10) ------------------------------
+# --- consume the shared manifest reader ------------------------------
 lib="$script_dir/../lib/manifest.sh"
 [ -f "$lib" ] || {
-  printf 'capture: manifest-library-missing (expected lib/manifest.sh, D-10)\n' >&2
+  printf 'capture: manifest-library-missing (expected lib/manifest.sh)\n' >&2
   exit 2
 }
 # shellcheck source=../lib/manifest.sh
 . "$lib"
 command -v manifest_entries >/dev/null 2>&1 || {
-  printf 'capture: manifest-reader-undefined (lib/manifest.sh, D-10)\n' >&2
+  printf 'capture: manifest-reader-undefined (lib/manifest.sh)\n' >&2
   exit 2
 }
 
-# --- shared secret detector + physical-tree path scanner (D-04) -------------
+# --- shared secret detector + physical-tree path scanner -------------
 secret_lib="$script_dir/../lib/secret-scan.sh"
 [ -f "$secret_lib" ] || {
-  printf 'capture: secret-detector-missing (expected lib/secret-scan.sh, D-04)\n' >&2
+  printf 'capture: secret-detector-missing (expected lib/secret-scan.sh)\n' >&2
   exit 2
 }
 # shellcheck source=../lib/secret-scan.sh
 . "$secret_lib"
 command -v secret_scan_tree >/dev/null 2>&1 || {
-  printf 'capture: secret-detector-undefined (lib/secret-scan.sh, D-04)\n' >&2
+  printf 'capture: secret-detector-undefined (lib/secret-scan.sh)\n' >&2
   exit 2
 }
 scanner="$script_dir/check-path-leaks.sh"
 [ -f "$scanner" ] || {
-  printf 'capture: path-scanner-missing (expected scripts/check-path-leaks.sh, D-04)\n' >&2
+  printf 'capture: path-scanner-missing (expected scripts/check-path-leaks.sh)\n' >&2
   exit 2
 }
 
@@ -144,7 +147,7 @@ trap cleanup EXIT
 
 tokens="$work/manifest.tokens"
 if ! manifest_entries "$manifest_path" "$tokens"; then
-  printf 'capture: manifest-parse-failed (D-10)\n' >&2
+  printf 'capture: manifest-parse-failed\n' >&2
   exit 2
 fi
 
@@ -191,17 +194,17 @@ done
 exec 3<&-
 
 if [ "$entry_count" -eq 0 ]; then
-  printf 'capture: manifest-empty (no entries parsed, D-10)\n' >&2
+  printf 'capture: manifest-empty (no entries parsed)\n' >&2
   exit 2
 fi
 
-# --- read-only remote preflight (D-08 / INV-01) -----------------------------
+# --- read-only remote preflight -----------------------------
 remote_preflight() {
   local names count
   names="$(git -C "$repo_root" remote 2>/dev/null | LC_ALL=C sort -u)"
   if [ -z "$names" ]; then
-    printf 'REMOTE: none configured — INV-01 pending (no URL invented, D-08)\n'
-    printf 'REMOTE: a listed URL alone does not prove provider visibility is Private; operator confirmation required (D-08)\n'
+    printf 'REMOTE: none configured —  pending (no URL invented)\n'
+    printf 'REMOTE: a listed URL alone does not prove provider visibility is Private; operator confirmation required\n'
     return 0
   fi
   count="$(printf '%s\n' "$names" | grep -c .)"
@@ -210,9 +213,9 @@ remote_preflight() {
     | sed -E 's#(://)[^/@[:space:]]*@#\1***@#g' \
     | sed 's/^/REMOTE: /'
   if [ "$count" -gt 1 ]; then
-    printf 'REMOTE: ambiguous — multiple remotes; INV-01 pending (D-08)\n'
+    printf 'REMOTE: ambiguous — multiple remotes;  pending\n'
   fi
-  printf 'REMOTE: INV-01 pending — URL listing does not prove provider visibility is Private (D-08)\n'
+  printf 'REMOTE:  pending — URL listing does not prove provider visibility is Private\n'
   return 0
 }
 remote_preflight
@@ -220,7 +223,7 @@ remote_preflight
 # --- NUL-safe drift accounting for a directory entry ------------------------
 # Compares a manifest-filtered source snapshot against the destination tree by
 # relative path, content checksum, and executable bit. Prints
-#   "<added> <changed> <removed> <signed-delta-bytes>"
+# "<added> <changed> <removed> <signed-delta-bytes>"
 account_dir() {
   node - "$1" "$2" <<'NODE'
 'use strict';
@@ -289,7 +292,7 @@ NODE
 
 # --- headless preflight: every origin present, readable, expected type ------
 # Runs to completion BEFORE any rsync --delete so a wrong-machine run can never
-# erase the payload to match an absent or unreadable source (D-02).
+# erase the payload to match an absent or unreadable source.
 for ((idx = 0; idx < entry_count; idx++)); do
   origin="${origins[$idx]}"
   dest="${dests[$idx]}"
@@ -301,19 +304,19 @@ for ((idx = 0; idx < entry_count; idx++)); do
   elif [ -f "$src" ]; then
     types[$idx]="file"
   else
-    printf 'capture: origin-missing (%s) — refusing before any change (D-02)\n' "$origin" >&2
+    printf 'capture: origin-missing (%s) — refusing before any change\n' "$origin" >&2
     exit 2
   fi
   if [ ! -r "$src" ]; then
-    printf 'capture: origin-unreadable (%s) — refusing before any change (D-02)\n' "$origin" >&2
+    printf 'capture: origin-unreadable (%s) — refusing before any change\n' "$origin" >&2
     exit 2
   fi
   if [ "${types[$idx]}" = "dir" ] && [ -f "$dst" ]; then
-    printf 'capture: dest-type-mismatch (%s is a file; manifest expects a directory) — refusing (D-02)\n' "$dest" >&2
+    printf 'capture: dest-type-mismatch (%s is a file; manifest expects a directory) — refusing\n' "$dest" >&2
     exit 2
   fi
   if [ "${types[$idx]}" = "file" ] && [ -d "$dst" ]; then
-    printf 'capture: dest-type-mismatch (%s is a directory; manifest expects a file) — refusing (D-02)\n' "$dest" >&2
+    printf 'capture: dest-type-mismatch (%s is a directory; manifest expects a file) — refusing\n' "$dest" >&2
     exit 2
   fi
 done
@@ -327,9 +330,9 @@ RS_FILE=(-p --no-links --checksum --no-owner --no-group --no-times)
 
 overall_drift=0
 
-# ================= dry-run: read-only drift preview (D-05/D-06) =============
+# ================= dry-run: read-only drift preview =============
 if [ "$DRY_RUN" -eq 1 ]; then
-  printf 'capture: dry-run — read-only drift preview (D-05/D-06)\n'
+  printf 'capture: dry-run — read-only drift preview\n'
 
   for ((idx = 0; idx < entry_count; idx++)); do
     origin="${origins[$idx]}"
@@ -441,7 +444,7 @@ mkdir -p "$candidate_root" || {
 }
 
 # 1. Mirror every validated MANIFEST source into the staged candidate with the
-#    same filters and options as a real capture (D-01/D-03/D-14).
+# same filters and options as a real capture.
 for ((idx = 0; idx < entry_count; idx++)); do
   origin="${origins[$idx]}"
   dest="${dests[$idx]}"
@@ -466,21 +469,21 @@ for ((idx = 0; idx < entry_count; idx++)); do
 done
 
 # 2. Pre-scan the exact staged bytes (post-exclusion, including Git-ignored
-#    files) before touching the live repo home/ (D-03). Any finding or scan
-#    error aborts with the live home/ left byte-for-byte unchanged.
+# files) before touching the live repo home/. Any finding or scan
+# error aborts with the live home/ left byte-for-byte unchanged.
 pre_ok=1
 SECRET_SCAN_BLOCKED=0
 if ! secret_scan_tree "$candidate_root/home"; then pre_ok=0; fi
 if [ "$SECRET_SCAN_BLOCKED" -ne 0 ]; then pre_ok=0; fi
 if ! bash "$scanner" --tree "$candidate_root/home"; then pre_ok=0; fi
 if [ "$pre_ok" -ne 1 ]; then
-  printf 'capture: pre-scan-blocked (D-03) — finding or scan error; live home/ left unchanged\n' >&2
+  printf 'capture: pre-scan-blocked — finding or scan error; live home/ left unchanged\n' >&2
   exit 1
 fi
 printf 'capture: pre-scan passed — tested detector coverage: 5 secret rules + 2 path families\n'
 
 # 3. Promote ONLY the scanned candidate bytes. Snapshot the prior home/ first so
-#    a later post-scan or promotion failure can restore it exactly (T-02-12).
+# a later post-scan or promotion failure can restore it exactly (-12).
 prev_home="$work/prev-home"
 had_prev=0
 if [ -e "$repo_root/home" ]; then
@@ -502,8 +505,8 @@ if ! mv -- "$candidate_root/home" "$repo_root/home"; then
   exit 2
 fi
 
-# 4. Post-copy re-scan of the physical published home/ (D-04). Any finding or
-#    scan error rejects the published payload and restores the prior tree.
+# 4. Post-copy re-scan of the physical published home/. Any finding or
+# scan error rejects the published payload and restores the prior tree.
 post_ok=1
 SECRET_SCAN_BLOCKED=0
 if ! secret_scan_tree "$repo_root/home"; then post_ok=0; fi
@@ -511,10 +514,10 @@ if [ "$SECRET_SCAN_BLOCKED" -ne 0 ]; then post_ok=0; fi
 if ! bash "$scanner" --tree "$repo_root/home"; then post_ok=0; fi
 if [ "$post_ok" -ne 1 ]; then
   restore_prev_home
-  printf 'capture: post-scan-blocked (D-04) — rejected published payload; prior home/ restored\n' >&2
+  printf 'capture: post-scan-blocked — rejected published payload; prior home/ restored\n' >&2
   exit 1
 fi
 printf 'capture: post-scan passed — tested detector coverage: 5 secret rules + 2 path families\n'
 
-printf 'capture: wrote payload only (D-09) — review git status, then commit and push\n'
+printf 'capture: wrote payload only — review git status, then commit and push\n'
 exit 0

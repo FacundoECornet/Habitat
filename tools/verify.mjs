@@ -2,13 +2,13 @@
 // tools/verify.mjs — post-restore functional verification (VER-01/VER-02).
 //
 // Checks, in order, each with a machine-readable name and an actionable hint:
-//   1. manifest-dests   every MANIFEST.json dest exists
-//   2. mcp-json         opencode.json / opencode.jsonc parse and carry valid mcp entries
-//   3. cli-tools        gsd-sdk --help and graphify --help respond (--no-cli skips)
-//   4. plugins          plugin files referenced by opencode.json exist
-//   5. discovery        skills/agents are discoverable
-//   6. model-ids        every model id in the effective home profiles is listed
-//                       by `opencode models` (--no-models skips)
+// 1. manifest-dests   every MANIFEST.json dest exists
+// 2. mcp-json         opencode.json / opencode.jsonc parse and carry valid mcp entries
+// 3. cli-tools        gsd-sdk --help and graphify --help respond (--no-cli skips)
+// 4. plugins          plugin files referenced by opencode.json exist
+// 5. discovery        skills/agents are discoverable
+// 6. model-ids        every model id in the effective home profiles is listed
+// by `opencode models` (--no-models skips)
 //
 // Exit 0 = all green, 1 = at least one failed check, 2 = usage error.
 

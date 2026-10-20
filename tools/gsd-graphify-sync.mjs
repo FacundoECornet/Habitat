@@ -6,8 +6,8 @@
 // graphify-out/graph.json exists with a modification time after the run start
 // (or was created by this run). The verdict is machine-readable:
 //
-//   GRAPHIFY_SYNC=ok        refreshed and verified
-//   GRAPHIFY_SYNC=failed    not refreshed (reason printed above the verdict)
+// GRAPHIFY_SYNC=ok        refreshed and verified
+// GRAPHIFY_SYNC=failed    not refreshed (reason printed above the verdict)
 //
 // When the project config declares graphify.enabled=true, a
 // .planning/graphs/last-sync.json record is written so the phase SUMMARY can

@@ -1,48 +1,48 @@
 #!/usr/bin/env bash
-# check-path-leaks.sh — fail-closed absolute-path portability scan (D-13/D-14)
+# check-path-leaks.sh — fail-closed absolute-path portability scan
 #
 # What it does:
-#   Scans the staged Git index blobs plus tracked and untracked candidate files
-#   for machine-bound absolute paths from two families: the Linux home-root
-#   absolute-path family and the Windows-mounted user-profile absolute-path
-#   family. On any match it exits nonzero and reports ONLY the
-#   candidate path, the rule name, and the line number — never the matched text.
+# Scans the staged Git index blobs plus tracked and untracked candidate files
+# for machine-bound absolute paths from two families: the Linux home-root
+# absolute-path family and the Windows-mounted user-profile absolute-path
+# family. On any match it exits nonzero and reports ONLY the
+# candidate path, the rule name, and the line number — never the matched text.
 #
 # Physical-tree mode (`--tree ROOT`):
-#   Walks every physical regular file under ROOT with a NUL-safe `find -type f`
-#   enumeration, including files Git would ignore, and skips symlinks. This is
-#   the post-copy / staged-payload gate: Git candidate enumeration can never
-#   prove a Git-ignored but copied file is clean. Enumeration, read, or grep
-#   errors block with a named `scan-failed` reason.
+# Walks every physical regular file under ROOT with a NUL-safe `find -type f`
+# enumeration, including files Git would ignore, and skips symlinks. This is
+# the post-copy / staged-payload gate: Git candidate enumeration can never
+# prove a Git-ignored but copied file is clean. Enumeration, read, or grep
+# errors block with a named `scan-failed` reason.
 #
 # Fail-closed policy:
-#   Only grep status 1 (no selected lines) is clean. Status 0 is a path leak.
-#   Any other grep status, a Git enumeration error, a failed indexed-blob read,
-#   an unreadable file, or a `find` enumeration error blocks with a named
-#   `scan-failed` reason.
+# Only grep status 1 (no selected lines) is clean. Status 0 is a path leak.
+# Any other grep status, a Git enumeration error, a failed indexed-blob read,
+# an unreadable file, or a `find` enumeration error blocks with a named
+# `scan-failed` reason.
 #
 # NUL-safe enumeration:
-#   Candidate paths are enumerated with Git `-z` output into a mktemp file so
-#   arbitrary path bytes (non-ASCII, tab, quote, backslash) survive intact;
-#   Bash cannot hold NUL bytes in a variable. A tracked path whose indexed blob
-#   cannot be read blocks as `scan-failed` rather than being silently skipped.
+# Candidate paths are enumerated with Git `-z` output into a mktemp file so
+# arbitrary path bytes (non-ASCII, tab, quote, backslash) survive intact;
+# Bash cannot hold NUL bytes in a variable. A tracked path whose indexed blob
+# cannot be read blocks as `scan-failed` rather than being silently skipped.
 #
 # Home-root refusal:
-#   In Git candidate mode only, a supplied repository root that resolves to
-#   $HOME is refused BEFORE any file traversal, so a home-rooted planning
-#   harness can never be scanned broadly. Physical-tree mode scans exactly the
-#   ROOT it is given (the payload boundary is never $HOME).
+# In Git candidate mode only, a supplied repository root that resolves to
+# $HOME is refused BEFORE any file traversal, so a home-rooted planning
+# harness can never be scanned broadly. Physical-tree mode scans exactly the
+# ROOT it is given (the payload boundary is never $HOME).
 #
 # Symlinks:
-#   Symlinks are never followed and never read; they are skipped.
+# Symlinks are never followed and never read; they are skipped.
 #
 # Bypass limitation:
-#   This is a normal-workflow gate, not a security boundary. It does not defend
-#   against a caller that deliberately supplies a different, unrelated root.
+# This is a normal-workflow gate, not a security boundary. It does not defend
+# against a caller that deliberately supplies a different, unrelated root.
 #
 # Usage:
-#   scripts/check-path-leaks.sh [repo-root]
-#   scripts/check-path-leaks.sh --tree ROOT
+# scripts/check-path-leaks.sh [repo-root]
+# scripts/check-path-leaks.sh --tree ROOT
 #
 # NOTE: `set -e` is deliberately omitted — grep exit statuses are handled
 # explicitly. Only `set -u` and `set -o pipefail` are enabled.
@@ -109,11 +109,11 @@ ROOT="$(cd "$ROOT_INPUT" 2>/dev/null && pwd -P)" || {
 
 # --- git candidate mode preconditions ---------------------------------------
 if [ "$MODE" = "git" ]; then
-  # Refuse a home-rooted scan before any traversal (T-01-04).
+  # Refuse a home-rooted scan before any traversal (-04).
   if [ -n "${HOME:-}" ]; then
     HOME_REAL="$(cd "$HOME" 2>/dev/null && pwd -P)" || HOME_REAL="$HOME"
     if [ "$ROOT" = "$HOME_REAL" ]; then
-      printf 'PATH LEAK: refusing to scan a repository root equal to HOME (D-13/T-01-04)\n' >&2
+      printf 'PATH LEAK: refusing to scan a repository root equal to HOME\n' >&2
       exit 2
     fi
   fi
@@ -160,7 +160,7 @@ scan_content() {
 
 blocked_exit() {
   if [ "$blocked" -ne 0 ]; then
-    printf 'check-path-leaks: scan BLOCKED (D-13). Remove machine-bound absolute paths; fix any scan errors.\n' >&2
+    printf 'check-path-leaks: scan BLOCKED. Remove machine-bound absolute paths; fix any scan errors.\n' >&2
     exit 1
   fi
   exit 0

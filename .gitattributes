@@ -1,5 +1,5 @@
 # .gitattributes — Habitat: el tooling asume LF (anclas de parche, bash, checksums).
-# F-10: sin estos pins, un checkout Windows (core.autocrlf=true) deja CRLF y
+# : sin estos pins, un checkout Windows (core.autocrlf=true) deja CRLF y
 # rompe extractAnchors de install.mjs + todos los .sh. Alcance mínimo: solo
 # archivos funcionales; el resto del payload documental queda con el default.
 

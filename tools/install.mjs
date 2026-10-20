@@ -2,15 +2,15 @@
 // tools/install.mjs — cross-platform habitat installer (VER-01/VER-02 entry point).
 //
 // Phases (each skippable, each idempotent):
-//   1. detect      OS/arch detection (Windows native / WSL / Linux / macOS)
-//   2. models      choose per-agent/profile preferences before installation
-//   3. deps        optional (--with-deps): npm globals + graphifyy
-//   4. gsd         optional (--with-gsd): run the GSD installer, then re-apply the
-//                  anchored §5.5 patch and the $HOME path sanitization, both
-//                  checksum-verified (a mismatch is reported, never silently patched)
-//   5. bin         copy tools/*.mjs to <home>/bin (POSIX) or <home>/bin/*.mjs + *.cmd (win32)
-//   6. restore     tools/restore.mjs (single Node engine; scripts/restore.sh is a shim)
-//   7. verify      tools/verify.mjs
+// 1. detect      OS/arch detection (Windows native / WSL / Linux / macOS)
+// 2. models      choose per-agent/profile preferences before installation
+// 3. deps        optional (--with-deps): npm globals + graphifyy
+// 4. gsd         optional (--with-gsd): run the GSD installer, then re-apply the
+// anchored §5.5 patch and the $HOME path sanitization, both
+// checksum-verified (a mismatch is reported, never silently patched)
+// 5. bin         copy tools/*.mjs to <home>/bin (POSIX) or <home>/bin/*.mjs + *.cmd (win32)
+// 6. restore     tools/restore.mjs (single Node engine; scripts/restore.sh is a shim)
+// 7. verify      tools/verify.mjs
 //
 // JEV reuses OpenCode Zen credentials from OpenCode's auth store. Backups are
 // timestamped siblings; nothing is deleted.
@@ -677,7 +677,7 @@ function copyBin(options) {
       if (!options.dryRun) {
         // Replace whatever is there, including a symlink: writing through a
         // symlinked target would silently mutate its destination and leave the
-        // command pointing at the wrong file (F-12). Unlink a symlink after
+        // command pointing at the wrong file. Unlink a symlink after
         // backing it up, then write a fresh regular file.
         let present = false;
         try { fs.lstatSync(targetPath); present = true; } catch { present = false; }
