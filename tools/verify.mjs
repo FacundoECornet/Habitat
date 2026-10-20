@@ -116,7 +116,18 @@ function checkPortablePaths(home) {
   if (!fs.existsSync(root)) return;
   const forbidden = ["__HABITAT_HOME__"];
   const ownHome = path.resolve(home).replace(/\\/g, "/").toLowerCase();
-  const foreignHome = /\/home\/[A-Za-z_][^/\s"'`)]*/g;
+  // Home roots of another machine, in every spelling the payload can carry:
+  // POSIX (/home/<login>), native Windows (<drive>:/Users/<login>) and the WSL
+  // mount (/mnt/<drive>/Users/<login>). The payload is cross-platform, so all
+  // three are checked on every platform.
+  const foreignHomes = [
+    /\/home\/[A-Za-z_][^/\s"'`)]*/g,
+    // The login must start with a letter, a digit or an underscore, so a
+    // documented placeholder (C:/Users/..., C:/Users/<usuario>) is not read as
+    // somebody else's home.
+    /[A-Za-z]:[\\/]Users[\\/][A-Za-z0-9_][^\\/\s"'`.)]*/g,
+    /\/mnt\/[A-Za-z][\\/]Users[\\/][A-Za-z0-9_][^\\/\s"'`.)]*/gi,
+  ];
   const hits = [];
   // Vendor-managed copies and stale backups are not payload: they are written
   // by other tools (the GSD installer keeps a pristine copy) and never
@@ -136,12 +147,14 @@ function checkPortablePaths(home) {
       for (const token of forbidden) {
         if (text.includes(token)) hits.push(`${path.relative(home, abs)} (${token})`);
       }
-      for (const match of text.match(foreignHome) ?? []) {
-        const candidate = match.toLowerCase();
-        // The same account's home root is legitimate (the payload expands to
-        // this machine's home); any other login is a foreign absolute path.
-        if (candidate === ownHome || ownHome.startsWith(`${candidate}/`)) continue;
-        hits.push(`${path.relative(home, abs)} (${match})`);
+      for (const pattern of foreignHomes) {
+        for (const match of text.match(pattern) ?? []) {
+          const candidate = match.replace(/\\/g, "/").toLowerCase();
+          // The same account's home root is legitimate (the payload expands to
+          // this machine's home); any other login is a foreign absolute path.
+          if (candidate === ownHome || ownHome.startsWith(`${candidate}/`)) continue;
+          hits.push(`${path.relative(home, abs)} (${match})`);
+        }
       }
     }
   }
