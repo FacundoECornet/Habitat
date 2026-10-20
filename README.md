@@ -160,6 +160,8 @@ a mano:
 gsd-route medium
 ```
 
+> Diagrama interactivo del flujo: [`docs/jev-profiles.html`](docs/jev-profiles.html)
+
 ### Caveman
 
 Habitat incluye el plugin y los comandos de Caveman para controlar cuánto se comprime el estilo
