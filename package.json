@@ -3,5 +3,8 @@
   "private": true,
   "scripts": {
     "test": "node tests/run.mjs"
+  },
+  "devDependencies": {
+    "@jkudish/jev-mcp": "0.14.3"
   }
 }
