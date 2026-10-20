@@ -130,12 +130,41 @@ function fixture(t) {
   return { base, repo, home };
 }
 
-function capture(fx, args = []) {
+function capture(fx, args = [], pathPrefix) {
+  const env = { ...process.env, HOME: fx.home };
+  if (pathPrefix) env.PATH = `${pathPrefix}${path.delimiter}${env.PATH ?? ""}`;
   const result = spawnSync("bash", [path.join(fx.repo, "scripts", "capture.sh"), ...args], {
     encoding: "utf8",
-    env: { ...process.env, HOME: fx.home },
+    env,
   });
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+}
+
+// A stub of rsync that adds an attribute-only itemize line (a different
+// mtime) to the output, the way the rsync of macOS does on a converged tree.
+function stubRsyncWithAttributeNoise(t) {
+  const real = spawnSync("bash", ["-c", "command -v rsync"], { encoding: "utf8" }).stdout.trim();
+  assert.ok(real, "rsync tiene que estar disponible para este caso");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-rsync-stub-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "rsync");
+  fs.writeFileSync(
+    file,
+    [
+      "#!/usr/bin/env bash",
+      "args=()",
+      'for a in "$@"; do args+=("$a"); done',
+      'noise=0',
+      'for a in "${args[@]}"; do if [ "$a" = "--itemize-changes" ]; then noise=1; fi; done',
+      `"${real}" "\${args[@]}"`,
+      "status=$?",
+      'if [ "$noise" -eq 1 ]; then echo ".f..T.... router.json"; fi',
+      "exit $status",
+      "",
+    ].join("\n"),
+  );
+  fs.chmodSync(file, 0o755);
+  return dir;
 }
 
 // Lineas de accounting por entrada: "added=.. changed=.. removed=.. delta=.."
@@ -320,4 +349,56 @@ test("capture no stagea ni commitea nada", POSIX_ONLY, (t) => {
   assert.equal(commits.stdout.trim(), "", "no hay commits nuevos");
   const status = git(fx.repo, ["status", "--porcelain"]);
   assert.match(status.stdout, /home\//, "el payload aparece como cambio sin stagear");
+});
+
+// C11 — los excludes del manifiesto se aplican a los dos lados del comparativo:
+// lo que el manifiesto deja fuera no es payload, asi que tampoco es drift.
+test("capture --dry-run no cuenta como drift lo que el manifiesto excluye", POSIX_ONLY, (t) => {
+  const fx = fixture(t);
+  // Lo que deja un `npm ci` dentro del checkout del repo: ignorado por git y
+  // excluido por el manifiesto, asi que no es algo que la captura publique.
+  write(path.join(fx.repo, "home", ".config", "opencode", "node_modules", "pkg", "index.js"), "deps\n");
+
+  const result = capture(fx, ["--dry-run"]);
+  const counters = accounting(result.stdout);
+  assert.ok(counters.length > 0, "el dry-run reporta las entradas");
+  assert.equal(counters[0].removed, 0, "lo excluido no se cuenta como removido");
+});
+
+// C12 — el GSD deja backups con timestamp en su propia raiz; no son payload.
+test("capture excluye los backups con timestamp de la raiz de GSD", POSIX_ONLY, (t) => {
+  const fx = fixture(t);
+  write(path.join(fx.home, ".gsd", "backup-20261002-133943", "router.json"), "{}\n");
+
+  const result = capture(fx);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    fs.existsSync(path.join(fx.repo, "home", ".gsd", "backup-20261002-133943")),
+    false,
+    "el backup del GSD no se publica",
+  );
+});
+//
+// El rsync de macOS (2.6.9) itemiza una diferencia de mtime sobre un arbol
+// convergente (".f..T...."). Si el veredicto se leyera de esa salida, el
+// preview diria "drift" en macOS siempre, aunque no haya nada que capturar.
+test("capture --dry-run ignora las diferencias de solo atributos de rsync", POSIX_ONLY, (t) => {
+  const fx = fixture(t);
+  const first = capture(fx);
+  assert.equal(first.status, 0, first.stderr);
+
+  const stub = stubRsyncWithAttributeNoise(t);
+  const second = capture(fx, ["--dry-run"], stub);
+  const counters = accounting(second.stdout);
+  assert.ok(counters.length > 0, "el dry-run reporta las entradas");
+  assert.ok(
+    counters.every((c) => c.added === 0 && c.changed === 0 && c.removed === 0),
+    `el accounting debe estar en cero: ${JSON.stringify(counters)}`,
+  );
+  assert.equal(
+    second.status,
+    0,
+    `un rsync que solo itemiza atributos no puede inventar drift: ${second.stdout}\n${second.stderr}`,
+  );
+  assert.match(second.stdout, /DRIFT: none/);
 });

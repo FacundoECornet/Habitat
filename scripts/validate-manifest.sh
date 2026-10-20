@@ -94,7 +94,9 @@ const REQUIRED_EXCLUDES = [
 const REQUIRED_EXCLUDES_BY_ORIGIN = new Map([
   ['.config/opencode', ['bin/', 'sessions/', 'gsd-router.backup/', 'backup-*', 'gsd-install-state.json', 'gsd-pristine/']],
   ['.claude/skills', ['bin/']],
-  ['.gsd', ['bin/']]
+  // The GSD router keeps its own timestamped backups here; they are machine
+  // state, not payload.
+  ['.gsd', ['bin/', 'backup-*']]
 ]);
 
 const ENTRY_KEYS = ['origin', 'dest', 'mode', 'excludes', 'post_steps'];
