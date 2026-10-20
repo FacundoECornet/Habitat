@@ -68,7 +68,7 @@ usuarios sin credencial de OpenCode Zen.
   BSD de verdad.
 - **Job semanal del catálogo de modelos**: revisa el catálogo una vez por semana y abre (o
   actualiza) un issue con la lista exacta de agentes y perfiles afectados. Necesita el secreto
-  `OPENCODE_ZEN_KEY` del repositorio para ver el catálogo completo.
+  `OPENCODE_AUTH` del repositorio para ver el catálogo completo.
 
 ## [0.1.6] - 2026-10-20
 

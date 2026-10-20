@@ -165,9 +165,11 @@ jobs:
   # every user fails, so the catalog is checked weekly and an issue is opened
   # with the exact list of affected agents and profiles.
   #
-  # The check needs the OpenCode Zen credential to see the complete catalog:
-  # without it, the public listing still advertises models OpenCode already
-  # retired. Set the repository secret OPENCODE_ZEN_KEY to enable it.
+  # The check needs the OpenCode credentials to see the complete catalog:
+  # without them, the public listing still advertises models OpenCode already
+  # retired. Set the repository secret OPENCODE_AUTH to enable it (a JSON
+  # object with the "opencode-go" and "opencode" providers, the same shape
+  # the OpenCode CLI writes to its auth store).
   model-catalog:
     name: Model catalog
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -189,14 +191,15 @@ jobs:
 
       - name: Authenticate
         env:
-          OPENCODE_ZEN_KEY: ${{ secrets.OPENCODE_ZEN_KEY }}
+          OPENCODE_AUTH: ${{ secrets.OPENCODE_AUTH }}
         run: |
-          if [ -n "$OPENCODE_ZEN_KEY" ]; then
+          if [ -n "$OPENCODE_AUTH" ]; then
             mkdir -p "$HOME/.local/share/opencode"
-            printf '{"opencode":{"type":"api","key":"%s"}}' "$OPENCODE_ZEN_KEY" > "$HOME/.local/share/opencode/auth.json"
+            printf '%s' "$OPENCODE_AUTH" > "$HOME/.local/share/opencode/auth.json"
+            chmod 600 "$HOME/.local/share/opencode/auth.json"
             echo "credential configured"
           else
-            echo "::warning::no OPENCODE_ZEN_KEY secret: the public catalog cannot detect retired ids, so this run only reports what it can see"
+            echo "::warning::no OPENCODE_AUTH secret: the public catalog cannot detect retired ids, so this run only reports what it can see"
           fi
 
       - name: Check the catalog
