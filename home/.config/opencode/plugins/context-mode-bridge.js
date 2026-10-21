@@ -20,25 +20,18 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
 const SERVER_NAME = "context-mode";
 const REPORT_NAME = ".habitat-context-mode.json";
 
-// The report belongs next to the config this plugin was loaded from: the
-// plugin lives in <config>/plugins/, so the config dir is two levels up. That
-// keeps the report where `tools/verify.mjs` looks for it, whatever
-// XDG_CONFIG_HOME says.
+// The report goes to the config dir of the host, the same one
+// `tools/verify.mjs` reads. It is resolved from the environment and not from
+// the location of this file: the host can load the plugin from a copy (in its
+// cache), and the setup and the session can run in different processes.
 function configDir() {
-  try {
-    // <config>/plugins/context-mode-bridge.js -> <config>
-    const here = dirname(fileURLToPath(import.meta.url));
-    return dirname(here);
-  } catch (error) {
-    if (process.env.XDG_CONFIG_HOME) return join(process.env.XDG_CONFIG_HOME, "opencode");
-    return join(homedir(), ".config", "opencode");
-  }
+  if (process.env.XDG_CONFIG_HOME) return join(process.env.XDG_CONFIG_HOME, "opencode");
+  return join(homedir(), ".config", "opencode");
 }
 
 function readReport() {

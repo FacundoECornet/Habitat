@@ -61,15 +61,18 @@ function v1SetupContext() {
   };
 }
 
-// The bridge writes its report next to the file it was loaded from, so the
-// test copies it to the installed layout (<config>/plugins/) instead of
-// importing it from the repository.
-function installedBridge(t, home) {
-  const dir = path.join(home, ".config", "opencode", "plugins");
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, "context-mode-bridge.js");
-  fs.copyFileSync(bridgePath, file);
-  return file;
+// The bridge writes its report to the config dir of the host (from the
+// environment), so the test points XDG_CONFIG_HOME at a temporary home.
+function withConfigHome(t) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-bridge-"));
+  const previous = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = path.join(home, ".config");
+  t.after(() => {
+    if (previous === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = previous;
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+  return home;
 }
 
 // A 2.x host: the mcp domain can register a server.
@@ -189,9 +192,8 @@ test("plugin puente: el modulo exporta las dos formas", async () => {
 });
 
 test("plugin puente: en un host 1.x no hace nada", async (t) => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-bridge-"));
-  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
-  const mod = await import(pathToFileURL(installedBridge(t, home)).href);
+  const home = withConfigHome(t);
+  const mod = await import(pathToFileURL(bridgePath).href);
   const { ctx, calls } = v2McpContext();
   delete ctx.mcp;
   await mod.default.setup(ctx);
@@ -199,10 +201,9 @@ test("plugin puente: en un host 1.x no hace nada", async (t) => {
 });
 
 test("plugin puente: en un host 2.x registra el MCP de context-mode", async (t) => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-bridge-"));
-  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const home = withConfigHome(t);
 
-  const mod = await import(pathToFileURL(installedBridge(t, home)).href);
+  const mod = await import(pathToFileURL(bridgePath).href);
   const { ctx, calls } = v2McpContext();
   await mod.default.setup(ctx);
 
@@ -220,10 +221,9 @@ test("plugin puente: en un host 2.x registra el MCP de context-mode", async (t) 
 });
 
 test("plugin puente: si el MCP no levanta, el reporte lo dice", async (t) => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-bridge-"));
-  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const home = withConfigHome(t);
 
-  const mod = await import(pathToFileURL(installedBridge(t, home)).href);
+  const mod = await import(pathToFileURL(bridgePath).href);
   const { ctx } = v2McpContext();
   ctx.mcp.list = async () => [{ name: "context-mode", status: { status: "failed", error: "boom" } }];
   await mod.default.setup(ctx);
@@ -236,10 +236,9 @@ test("plugin puente: si el MCP no levanta, el reporte lo dice", async (t) => {
 });
 
 test("plugin puente: el contexto de sesion deja ver las herramientas ctx_*", async (t) => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-bridge-"));
-  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const home = withConfigHome(t);
 
-  const mod = await import(pathToFileURL(installedBridge(t, home)).href);
+  const mod = await import(pathToFileURL(bridgePath).href);
   const { ctx } = v2McpContext();
   const sessionHooks = [];
   ctx.session = {
