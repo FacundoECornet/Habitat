@@ -220,27 +220,29 @@ jobs:
         run: |
           export HOME="$RUNNER_TEMP/habitat-home"
           config="$HOME/.config/opencode/opencode.jsonc"
-          version="$(opencode --version)"
-          echo "OpenCode: $version"
-          if [ "${{ matrix.source }}" = "npm" ]; then
-            # 1.x: the native plugin stays and provides the tools.
-            grep -q '"context-mode"' "$config" || {
-              echo "::error::en la línea 1.x el plugin nativo de context-mode tiene que seguir declarado"
-              exit 1
+          echo "OpenCode: $(opencode --version)"
+          # The plugin array is parsed, not grepped: the config has comments
+          # that mention context-mode.
+          node -e '
+            const fs = require("fs");
+            const raw = fs.readFileSync(process.argv[1], "utf8");
+            const clean = raw
+              .replace(/\/\*[\s\S]*?\*\//g, "")
+              .replace(/(^|\s+)\/\/[^\n]*/g, "$1")
+              .replace(/,(\s*[}\]])/g, "$1");
+            const plugins = JSON.parse(clean).plugin || [];
+            const native = plugins.includes("context-mode");
+            const bridge = plugins.some((p) => String(p).includes("context-mode-bridge"));
+            const want = process.argv[2];
+            if (want === "1.x") {
+              if (!native) { console.error("::error::en la línea 1.x el plugin nativo de context-mode tiene que seguir declarado"); process.exit(1); }
+              console.log("ok: el plugin nativo sigue declarado");
+            } else {
+              if (native) { console.error("::error::en la línea 2.x el plugin nativo de context-mode no carga: el instalador tenía que sacarlo"); process.exit(1); }
+              if (!bridge) { console.error("::error::falta el plugin puente de context-mode"); process.exit(1); }
+              console.log("ok: el puente quedó declarado y el nativo fuera");
             }
-            echo "ok: el plugin nativo sigue declarado"
-          else
-            # 2.x: the native plugin cannot load, the bridge registers the MCP.
-            if grep -q '"context-mode"' "$config"; then
-              echo "::error::en la línea 2.x el plugin nativo de context-mode no carga: el instalador tenía que sacarlo"
-              exit 1
-            fi
-            grep -q 'context-mode-bridge' "$config" || {
-              echo "::error::falta el plugin puente de context-mode"
-              exit 1
-            }
-            echo "ok: el puente quedó declarado y el nativo fuera"
-          fi
+          ' "$config" "${{ matrix.source == 'npm' && '1.x' || '2.x' }}"
 
       - name: Check the ctx_* tools are exposed
         run: |
