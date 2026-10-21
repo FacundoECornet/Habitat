@@ -264,13 +264,15 @@ jobs:
             # shows its tools. No session and no credentials needed.
             listing="$(opencode mcp list 2>&1 || true)"
             echo "$listing" | head -30
-            count="$(printf '%s' "$listing" | grep -oiE 'ctx_[a-z_]+' | sort -u | wc -l | tr -d ' ')"
-            echo "herramientas ctx_* en el listado: $count"
-            if [ "$count" -lt 11 ]; then
-              echo "::error::la línea 2.x debería exponer las 11 herramientas ctx_* por MCP (encontradas: $count)"
+            # El listado muestra servidor y estado (no los nombres de las
+            # herramientas): lo que prueba es que el servidor MCP de
+            # context-modeLevanta y conecta en la línea 2.x.
+            if ! printf '%s' "$listing" | grep -iE 'context-mode.*connected' >/dev/null; then
+              echo "::error::en la línea 2.x el servidor MCP de context-mode no está conectado:"
+              echo "$listing"
               exit 1
             fi
-            echo "ok: las herramientas ctx_* están expuestas por MCP"
+            echo "ok: el servidor MCP de context-mode está conectado"
           fi
 
   # OpenCode retires model ids over time. When that happens the install of
