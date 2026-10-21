@@ -61,15 +61,40 @@ function writeReport(payload) {
 // 1.x contract: nothing to do here, the real context-mode plugin is in charge.
 export const ContextModeBridgePlugin = async () => ({});
 
-// The V2 API returns paginated results, so the list can be an array or an
-// object with the page inside. Both shapes are accepted.
-function serverList(result) {
+// The V2 API returns an Effect result: `{location, data}`, and the page can
+// be an array or an object with the items inside. Every shape is accepted.
+function serverList(result, depth = 0) {
   if (Array.isArray(result)) return result;
-  if (!result || typeof result !== "object") return [];
-  for (const key of ["items", "data", "servers", "results", "list"]) {
-    if (Array.isArray(result[key])) return result[key];
+  if (!result || typeof result !== "object" || depth > 2) return [];
+  for (const key of ["data", "items", "servers", "results", "list", "page"]) {
+    const value = result[key];
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === "object") {
+      const nested = serverList(value, depth + 1);
+      if (nested.length > 0) return nested;
+    }
   }
   return [];
+}
+
+// A short description of whatever the listing returned, so a shape change is
+// readable from the report instead of guesswork.
+function describe(value, depth = 0) {
+  if (Array.isArray(value)) {
+    return {
+      kind: "array",
+      length: value.length,
+      names: value.map((item) => item?.name ?? item?.id ?? null).filter(Boolean).slice(0, 12),
+    };
+  }
+  if (!value || typeof value !== "object" || depth > 2) return { kind: typeof value };
+  const described = { kind: "object", keys: Object.keys(value).slice(0, 8) };
+  for (const key of ["data", "items", "servers", "results", "list", "page"]) {
+    if (value[key] !== undefined) {
+      described[key] = describe(value[key], depth + 1);
+    }
+  }
+  return described;
 }
 
 function serverStatus(entry) {
@@ -109,11 +134,7 @@ async function setupV2(ctx) {
     error = entry?.status?.error ?? null;
     // What the listing looked like, so a future shape change is readable from
     // the report instead of guessing.
-    mcpList = {
-      kind: Array.isArray(raw) ? "array" : typeof raw,
-      keys: raw && typeof raw === "object" && !Array.isArray(raw) ? Object.keys(raw).slice(0, 8) : [],
-      names: servers.map((server) => server?.name).filter(Boolean).slice(0, 12),
-    };
+    mcpList = describe(raw);
   } catch (error_) {
     error = String(error_?.message ?? error_);
   }
@@ -133,9 +154,14 @@ async function setupV2(ctx) {
         // The host can name the MCP tools with a prefix ("context-mode_ctx_..."),
         // so the match is not anchored at the start.
         const names = all.filter((name) => /ctx/i.test(name));
-        if (names.length === 0) return;
         recorded = true;
-        writeReport({ ...readReport(), ok: true, tools: names.sort(), totalTools: all.length });
+        writeReport({
+          ...readReport(),
+          ok: names.length > 0,
+          tools: names.sort(),
+          totalTools: all.length,
+          sampleTools: all.slice(0, 20),
+        });
       });
     } catch (error) {
       // A diagnostic hook must never break a request.
