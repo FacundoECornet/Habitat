@@ -20,13 +20,25 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "context-mode";
 const REPORT_NAME = ".habitat-context-mode.json";
 
+// The report belongs next to the config this plugin was loaded from: the
+// plugin lives in <config>/plugins/, so the config dir is two levels up. That
+// keeps the report where `tools/verify.mjs` looks for it, whatever
+// XDG_CONFIG_HOME says.
 function configDir() {
-  return join(homedir(), ".config", "opencode");
+  try {
+    // <config>/plugins/context-mode-bridge.js -> <config>
+    const here = dirname(fileURLToPath(import.meta.url));
+    return dirname(here);
+  } catch (error) {
+    if (process.env.XDG_CONFIG_HOME) return join(process.env.XDG_CONFIG_HOME, "opencode");
+    return join(homedir(), ".config", "opencode");
+  }
 }
 
 function readReport() {

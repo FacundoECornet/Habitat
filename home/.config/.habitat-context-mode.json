@@ -1,0 +1,6 @@
+{
+  "tools": [
+    "ctx_execute",
+    "ctx_stats"
+  ]
+}
