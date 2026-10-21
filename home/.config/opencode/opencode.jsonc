@@ -7,15 +7,15 @@
   // Plugins locales + paquetes npm. La ruta es relativa a este archivo, por eso
   // el prefijo "./" (nunca una ruta absoluta de la PC de origen).
   //
-  // "context-mode" es el plugin nativo (línea 1.x de opencode). El puente
-  // "./plugins/context-mode-bridge.js" cubre la línea 2.x: allí el plugin
-  // nativo no carga, y el puente registra el servidor MCP de context-mode para
-  // que las herramientas ctx_* sigan disponibles.
+  // "context-mode" es el plugin nativo: sirve para la línea 1.x de opencode.
+  // En la línea 2.x un plugin 1.x no carga (el host solo acepta un default
+  // export con id + setup), así que el instalador lo quita de acá y declara el
+  // servidor MCP de context-mode en el bloque "mcp" de más abajo: las
+  // herramientas ctx_* siguen disponibles, por la misma vía que usa el plugin.
   "plugin": [
     "./plugins/caveman/plugin.js",
     "./plugins/graphify.js",
-    "context-mode",
-    "./plugins/context-mode-bridge.js"
+    "context-mode"
   ],
 
   "agent": {

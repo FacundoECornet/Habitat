@@ -533,6 +533,114 @@ function removePluginEntry(text, name) {
   throw new Error(`no se pudo quitar el plugin ${name}`);
 }
 
+// Adds or removes one entry of the `plugin` array of a JSONC text.
+function setPluginEntry(text, name, present) {
+  let original;
+  try {
+    original = JSON.parse(stripJsonComments(text));
+  } catch (error) {
+    throw new Error(`config de plugins ilegible: ${error.message}`);
+  }
+  const listed = Array.isArray(original?.plugin) ? original.plugin : [];
+  const has = listed.includes(name);
+  if (has === present) return { text, changed: false };
+
+  const keyPattern = /"plugin"\s*:/g;
+  let match;
+  while ((match = keyPattern.exec(text)) !== null) {
+    const afterColon = match.index + match[0].length;
+    const whitespace = /^\s*/.exec(text.slice(afterColon))[0].length;
+    const arrayStart = afterColon + whitespace;
+    if (text[arrayStart] !== "[") continue;
+    const arrayEnd = findJsonValueEnd(text, arrayStart);
+    if (arrayEnd < 0) continue;
+
+    const body = text.slice(arrayStart + 1, arrayEnd - 1);
+    let candidate;
+    if (present) {
+      // Append the entry at the end of the array.
+      const trimmed = body.replace(/\s+$/, "");
+      const separator = trimmed.length > 0 ? ", " : "";
+      candidate = text.slice(0, arrayStart + 1) + trimmed + separator + `"${name}"` + text.slice(arrayEnd - 1);
+    } else {
+      const elementPattern = new RegExp(`"${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`, "g");
+      const element = elementPattern.exec(body);
+      if (!element) continue;
+      let removeStart = element.index;
+      let removeEnd = element.index + element[0].length;
+      let ahead = removeEnd;
+      while (ahead < body.length && /[ \t]/.test(body[ahead])) ahead += 1;
+      if (body[ahead] === ",") {
+        removeEnd = ahead + 1;
+      } else {
+        let previous = removeStart - 1;
+        while (previous >= 0 && /\s/.test(body[previous])) previous -= 1;
+        if (body[previous] === ",") removeStart = previous;
+      }
+      while (removeEnd < body.length && /[ \t]/.test(body[removeEnd])) removeEnd += 1;
+      if (body[removeEnd] === "\r" && body[removeEnd + 1] === "\n") removeEnd += 2;
+      else if (body[removeEnd] === "\n") removeEnd += 1;
+      candidate = text.slice(0, arrayStart + 1) + body.slice(0, removeStart) + body.slice(removeEnd) + text.slice(arrayEnd - 1);
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(stripJsonComments(candidate));
+    } catch {
+      continue;
+    }
+    const nowListed = Array.isArray(parsed?.plugin) ? parsed.plugin : [];
+    if (nowListed.includes(name) !== present) continue;
+    return { text: candidate, changed: true };
+  }
+  throw new Error(`no se pudo modificar el array de plugins (${name})`);
+}
+
+// Adds or removes `mcp.<name>` in a JSONC text.
+function setMcpEntry(text, name, entry) {
+  let original;
+  try {
+    original = JSON.parse(stripJsonComments(text));
+  } catch (error) {
+    throw new Error(`config MCP ilegible: ${error.message}`);
+  }
+  const exists = original?.mcp?.[name] !== undefined;
+  if (!entry) {
+    if (!exists) return { text, changed: false };
+    const removed = removeMcpEntry(text, name);
+    return { text: removed.text, changed: removed.removed };
+  }
+  if (exists) return { text, changed: false };
+
+  const keyPattern = /"mcp"\s*:/g;
+  let match;
+  while ((match = keyPattern.exec(text)) !== null) {
+    const afterColon = match.index + match[0].length;
+    const whitespace = /^\s*/.exec(text.slice(afterColon))[0].length;
+    const objectStart = afterColon + whitespace;
+    if (text[objectStart] !== "{") continue;
+    const objectEnd = findJsonValueEnd(text, objectStart);
+    if (objectEnd < 0) continue;
+
+    const body = text.slice(objectStart + 1, objectEnd - 1);
+    const trimmed = body.replace(/^\s+|\s+$/g, "");
+    const separator = trimmed.length > 0 ? ", " : "";
+    const rendered = JSON.stringify(name) + ": " + JSON.stringify(entry);
+    const candidate =
+      text.slice(0, objectStart + 1) + (trimmed.length > 0 ? trimmed + separator : "") + rendered + text.slice(objectEnd - 1);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(stripJsonComments(candidate));
+    } catch {
+      continue;
+    }
+    if (parsed?.mcp?.[name] === undefined) continue;
+    return { text: candidate, changed: true };
+  }
+  throw new Error(`no se pudo agregar la entrada mcp.${name}`);
+}
+
 // The OpenCode major version of the installed CLI, or null when it is not
 // installed. 1.x and 2.x do not share the plugin contract, so the payload
 // has to adapt to the line the user actually runs.
@@ -543,44 +651,53 @@ function opencodeCliMajor(home) {
   return version ? Number(version[1]) : null;
 }
 
-// context-mode ships a 1.x plugin: on opencode 2.x it does not load at all,
-// and the host logs a plugin error. The payload carries a bridge plugin that
-// registers context-mode's MCP server on 2.x, so the `ctx_*` tools stay
-// available. On 2.x the native entry is removed from the config so the host
-// does not log a plugin that cannot load.
+// context-mode ships a 1.x plugin: on opencode 2.x it does not load at all
+// (the host only accepts a default export with `id` + `setup`) and logs a
+// plugin error. The MCP transport did not change between the two lines, so on
+// 2.x context-mode is declared as an MCP server instead: the same stdio child
+// the 1.x plugin uses in-process, and the same `ctx_*` tools. The routing
+// hooks stay behind until upstream ships a 2.x entrypoint.
+const CONTEXT_MODE_MCP = { type: "local", command: ["context-mode"], timeout: 10000 };
+
 function adaptContextModeToCli(options) {
   const major = opencodeCliMajor(options.home);
   if (major === null) {
     log("context-mode", "no se encontró el CLI de OpenCode; se deja la config del payload");
     return true;
   }
-  if (major < 2) {
-    log("context-mode", `OpenCode ${major}.x: context-mode va por su plugin nativo`);
-    return true;
-  }
+  const usePlugin = major < 2;
 
   const configDir = path.join(options.home, ".config", "opencode");
   for (const fileName of ["opencode.jsonc", "opencode.json"]) {
     const file = path.join(configDir, fileName);
     if (!fs.existsSync(file)) continue;
-    let result;
+    const original = fs.readFileSync(file, "utf8");
+    let text = original;
     try {
-      result = removePluginEntry(fs.readFileSync(file, "utf8"), "context-mode");
+      const plugin = setPluginEntry(text, "context-mode", usePlugin);
+      text = plugin.text;
+      const mcp = setMcpEntry(text, "context-mode", usePlugin ? null : CONTEXT_MODE_MCP);
+      text = mcp.text;
     } catch (error) {
       fail(`no se pudo adaptar context-mode en ${file}: ${error.message}`);
       return false;
     }
-    if (!result.removed) continue;
+    if (text === original) continue;
     try {
-      JSON.parse(stripJsonComments(result.text));
+      JSON.parse(stripJsonComments(text));
     } catch (error) {
       fail(`no se pudo adaptar context-mode en ${file}: config resultante ilegible (${error.message})`);
       return false;
     }
     backupFile(file, options.home);
-    fs.writeFileSync(file, result.text);
-    log("context-mode", `OpenCode ${major}.x: el plugin nativo de context-mode no carga, queda el puente por MCP`);
+    fs.writeFileSync(file, text);
   }
+  log(
+    "context-mode",
+    usePlugin
+      ? `OpenCode ${major}.x: context-mode va por su plugin nativo`
+      : `OpenCode ${major}.x: el plugin nativo no carga, context-mode va por su servidor MCP`,
+  );
   return true;
 }
 

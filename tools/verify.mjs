@@ -190,56 +190,44 @@ function checkOpencodeCli(home) {
 
   const configPath = path.join(home, ".config", "opencode", "opencode.jsonc");
   let plugins = [];
+  let mcpServers = {};
   try {
     const parsed = readJsonish(configPath);
     if (Array.isArray(parsed.plugin)) plugins = parsed.plugin;
+    if (parsed.mcp && typeof parsed.mcp === "object") mcpServers = parsed.mcp;
   } catch (error) {
     // A config that does not parse is already reported by `mcp-json`.
   }
   const native = plugins.includes("context-mode");
-  const bridge = plugins.some((entry) => String(entry).includes("context-mode-bridge"));
-
-  // The bridge writes what it managed to register; it is the runtime proof.
-  let report = null;
-  try {
-    report = JSON.parse(
-      fs.readFileSync(path.join(home, ".config", "opencode", ".habitat-context-mode.json"), "utf8"),
-    );
-  } catch (error) {
-    // No report: the bridge never ran (1.x, or no session yet).
-  }
+  const viaMcp = mcpServers["context-mode"] !== undefined;
 
   if (line >= 2) {
-    if (!bridge) {
+    // On 2.x the native plugin cannot load; the route is the MCP server.
+    if (native && !viaMcp) {
       check(
         "opencode-cli",
         false,
-        `OpenCode ${version}: el plugin nativo de context-mode no carga en la línea 2.x y no está el puente`,
+        `OpenCode ${version}: el plugin nativo de context-mode no carga en la línea 2.x y no está declarado como servidor MCP`,
         "corré `node tools/install.mjs` para adaptar la config a la línea 2.x",
       );
       return;
     }
-    if (report && report.ok === false && report.error) {
+    if (!viaMcp) {
       check(
         "opencode-cli",
         false,
-        `OpenCode ${version}: el puente de context-mode no pudo registrar el MCP (${report.error})`,
-        "revisá que `context-mode` esté instalado globalmente (`npm i -g context-mode`) y corré `context-mode doctor`",
+        `OpenCode ${version}: context-mode no está declarado por ninguna vía (ni plugin ni MCP)`,
+        "corré `node tools/install.mjs` o declaralo en el bloque mcp de tu opencode.jsonc",
       );
       return;
     }
-    const tools = Array.isArray(report?.tools) ? report.tools.length : 0;
-    const detail = native
-      ? `OpenCode ${version}: context-mode va por el puente (MCP); el plugin nativo declarado no carga en 2.x — corré \`node tools/install.mjs\` para quitarlo`
-      : `OpenCode ${version}: context-mode va por el puente (MCP)`;
+    const tools = countCtxTools();
     check(
       "opencode-cli",
       true,
-      tools > 0
-        ? `${detail} — ${tools} herramientas ctx_* disponibles`
-        : report
-          ? `${detail} — el servidor está registrado, todavía sin sesión que confirme las herramientas`
-          : detail,
+      `OpenCode ${version}: context-mode va por su servidor MCP${
+        native ? "; el plugin nativo declarado no carga en 2.x — corré \`node tools/install.mjs\` para quitarlo" : ""
+      }${tools > 0 ? ` — ${tools} herramientas ctx_* disponibles` : ""}`,
       "",
     );
     return;
@@ -249,11 +237,11 @@ function checkOpencodeCli(home) {
     check("opencode-cli", true, `OpenCode ${version}: context-mode va por su plugin nativo`, "");
     return;
   }
-  if (bridge) {
+  if (viaMcp) {
     check(
       "opencode-cli",
       true,
-      `OpenCode ${version}: context-mode va por el puente (MCP), no por su plugin nativo`,
+      `OpenCode ${version}: context-mode va por su servidor MCP, no por su plugin nativo`,
       "corré `node tools/install.mjs` para usar el plugin nativo en la línea 1.x",
     );
     return;
@@ -263,6 +251,15 @@ function checkOpencodeCli(home) {
     `OpenCode ${version}: no hay plugin de context-mode declarado`,
     "si querés context-mode, declaralo en el plugin de tu opencode.jsonc",
   );
+}
+
+// How many `ctx_*` tools the CLI reports for context-mode. The listing format
+// changed between the 1.x and 2.x lines, so the count is a tolerant match.
+function countCtxTools() {
+  const result = runTool("opencode", ["mcp", "list"], 20000);
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+  const matches = output.match(/ctx_[a-z_]+/gi) ?? [];
+  return new Set(matches.map((name) => name.toLowerCase())).size;
 }
 
 function checkMcp(home, repo) {

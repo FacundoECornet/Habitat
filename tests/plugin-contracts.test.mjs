@@ -19,7 +19,6 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const payload = path.join(root, "home", ".config", "opencode");
 const cavemanPath = path.join(payload, "plugins", "caveman", "plugin.js");
 const graphifyPath = path.join(payload, "plugins", "graphify.js");
-const bridgePath = path.join(payload, "plugins", "context-mode-bridge.js");
 
 // Un contexto de host 2.x: los dominios que un plugin 2.x puede usar.
 function v2Context() {
@@ -59,20 +58,6 @@ function v1SetupContext() {
       tool: undefined,
     },
   };
-}
-
-// The bridge writes its report to the config dir of the host (from the
-// environment), so the test points XDG_CONFIG_HOME at a temporary home.
-function withConfigHome(t) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-bridge-"));
-  const previous = process.env.XDG_CONFIG_HOME;
-  process.env.XDG_CONFIG_HOME = path.join(home, ".config");
-  t.after(() => {
-    if (previous === undefined) delete process.env.XDG_CONFIG_HOME;
-    else process.env.XDG_CONFIG_HOME = previous;
-    fs.rmSync(home, { recursive: true, force: true });
-  });
-  return home;
 }
 
 // A 2.x host: the mcp domain can register a server.
@@ -182,88 +167,6 @@ test("plugin graphify: en 2.x el recordatorio precede al comando de bash", async
   await hook(input);
   assert.match(input.input.command, /^\s*echo "\[graphify\]/, "el recordatorio va primero");
   assert.match(input.input.command, /ls -la$/, "el comando original se conserva");
-});
-
-test("plugin puente: el modulo exporta las dos formas", async () => {
-  const mod = await import(pathToFileURL(bridgePath).href);
-  assert.equal(mod.default.id, "habitat-context-mode-bridge");
-  assert.equal(typeof mod.default.server, "function");
-  assert.equal(typeof mod.default.setup, "function");
-});
-
-test("plugin puente: en un host 1.x no hace nada", async (t) => {
-  const home = withConfigHome(t);
-  const mod = await import(pathToFileURL(bridgePath).href);
-  const { ctx, calls } = v2McpContext();
-  delete ctx.mcp;
-  await mod.default.setup(ctx);
-  assert.deepEqual(calls.set, [], "sin dominio mcp no se registra nada");
-});
-
-test("plugin puente: en un host 2.x registra el MCP de context-mode", async (t) => {
-  const home = withConfigHome(t);
-
-  const mod = await import(pathToFileURL(bridgePath).href);
-  const { ctx, calls } = v2McpContext();
-  await mod.default.setup(ctx);
-
-  assert.equal(calls.set.length, 1, "registra un servidor");
-  assert.equal(calls.set[0].name, "context-mode");
-  assert.deepEqual(calls.set[0].config, { type: "local", command: ["context-mode"] });
-  assert.equal(calls.reload, 1, "recarga para que el servidor suba");
-
-  const report = path.join(home, ".config", "opencode", ".habitat-context-mode.json");
-  assert.equal(fs.existsSync(report), true, "deja el reporte de ruta");
-  const parsed = JSON.parse(fs.readFileSync(report, "utf8"));
-  assert.equal(parsed.route, "mcp");
-  assert.equal(parsed.status, "connected", "el servidor MCP está arriba");
-  assert.equal(parsed.ok, false, "sin sesion todavia no se confirman las herramientas");
-});
-
-test("plugin puente: si el MCP no levanta, el reporte lo dice", async (t) => {
-  const home = withConfigHome(t);
-
-  const mod = await import(pathToFileURL(bridgePath).href);
-  const { ctx } = v2McpContext();
-  ctx.mcp.list = async () => [{ name: "context-mode", status: { status: "failed", error: "boom" } }];
-  await mod.default.setup(ctx);
-
-  const report = path.join(home, ".config", "opencode", ".habitat-context-mode.json");
-  const parsed = JSON.parse(fs.readFileSync(report, "utf8"));
-  assert.equal(parsed.ok, false);
-  assert.equal(parsed.status, "failed");
-  assert.equal(parsed.error, "boom");
-});
-
-test("plugin puente: el contexto de sesion deja ver las herramientas ctx_*", async (t) => {
-  const home = withConfigHome(t);
-
-  const mod = await import(pathToFileURL(bridgePath).href);
-  const { ctx } = v2McpContext();
-  const sessionHooks = [];
-  ctx.session = {
-    hook: async (name, callback) => {
-      sessionHooks.push({ name, callback });
-      return { dispose: async () => {} };
-    },
-  };
-  await mod.default.setup(ctx);
-
-  const contextHook = sessionHooks.find((h) => h.name === "context");
-  assert.ok(contextHook, "el puente escucha el contexto de la sesion");
-
-  await contextHook.callback({
-    tools: {
-      ctx_stats: { description: "stats" },
-      ctx_execute: { description: "execute" },
-      bash: { description: "shell" },
-    },
-  });
-
-  const report = path.join(home, ".config", "opencode", ".habitat-context-mode.json");
-  const parsed = JSON.parse(fs.readFileSync(report, "utf8"));
-  assert.deepEqual(parsed.tools, ["ctx_execute", "ctx_stats"], "solo las herramientas ctx_* se anotan");
-  assert.equal(parsed.ok, true, "con las herramientas observadas el reporte queda en verde");
 });
 
 test("plugin graphify: sin grafo no toca el comando", async (t) => {

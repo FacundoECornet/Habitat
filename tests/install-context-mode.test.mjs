@@ -51,6 +51,13 @@ function fixtureHome(t) {
   const configDir = path.join(home, ".config", "opencode");
   fs.mkdirSync(configDir, { recursive: true });
   fs.copyFileSync(payloadConfig, path.join(configDir, "opencode.jsonc"));
+  // A credential so the JEV MCP is not disabled (that is a different rule).
+  const dataDir = path.join(home, ".local", "share", "opencode");
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dataDir, "auth.json"),
+    JSON.stringify({ opencode: { type: "api", key: "test-key" } }),
+  );
   return home;
 }
 
@@ -85,15 +92,11 @@ test("install: en opencode 1.x context-mode queda como plugin nativo", (t) => {
 
   const config = readJsonc(fs.readFileSync(path.join(home, ".config", "opencode", "opencode.jsonc"), "utf8"));
   assert.equal(config.plugin.includes("context-mode"), true, "el plugin nativo se queda");
-  assert.equal(
-    config.plugin.includes("./plugins/context-mode-bridge.js"),
-    true,
-    "el puente sigue declarado para cuando haga falta",
-  );
+  assert.equal(config.mcp["context-mode"], undefined, "no hace falta la entrada MCP");
   assert.match(result.stdout, /context-mode va por su plugin nativo/);
 });
 
-test("install: en opencode 2.x el plugin nativo se quita y queda el puente", (t) => {
+test("install: en opencode 2.x el plugin nativo se quita y se declara el MCP", (t) => {
   const repo = fixtureRepo(t);
   const home = fixtureHome(t);
   const cli = fakeCli(t, "2.1.0");
@@ -103,13 +106,34 @@ test("install: en opencode 2.x el plugin nativo se quita y queda el puente", (t)
 
   const config = readJsonc(fs.readFileSync(path.join(home, ".config", "opencode", "opencode.jsonc"), "utf8"));
   assert.equal(config.plugin.includes("context-mode"), false, "el plugin nativo no puede cargar en 2.x");
-  assert.equal(
-    config.plugin.includes("./plugins/context-mode-bridge.js"),
-    true,
-    "el puente queda: es el que registra el MCP de context-mode",
-  );
   assert.equal(config.plugin.includes("./plugins/caveman/plugin.js"), true, "los otros plugins no se tocan");
-  assert.match(result.stdout, /queda el puente por MCP/);
+  assert.deepEqual(
+    config.mcp["context-mode"],
+    { type: "local", command: ["context-mode"], timeout: 10000 },
+    "context-mode queda declarado como servidor MCP",
+  );
+  assert.equal(config.mcp.jev !== undefined, true, "los otros servidores MCP no se tocan");
+  assert.match(result.stdout, /va por su servidor MCP/);
+});
+
+test("install: en opencode 1.x no queda la entrada MCP de context-mode", (t) => {
+  const repo = fixtureRepo(t);
+  const home = fixtureHome(t);
+  const cli = fakeCli(t, "1.19.3");
+
+  // A config that already came from a 2.x machine: the MCP entry has to go.
+  const configPath = path.join(home, ".config", "opencode", "opencode.jsonc");
+  const config = readJsonc(fs.readFileSync(configPath, "utf8"));
+  config.plugin = config.plugin.filter((entry) => entry !== "context-mode");
+  config.mcp["context-mode"] = { type: "local", command: ["context-mode"], timeout: 10000 };
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+
+  const result = install(repo, home, cli);
+  assert.equal(result.status, 0, result.stderr);
+
+  const updated = readJsonc(fs.readFileSync(configPath, "utf8"));
+  assert.equal(updated.plugin.includes("context-mode"), true, "el plugin nativo vuelve");
+  assert.equal(updated.mcp["context-mode"], undefined, "la entrada MCP se quita");
 });
 
 test("install: sin CLI de OpenCode la config del payload no se toca", (t) => {
