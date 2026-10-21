@@ -50,9 +50,25 @@ function readReport() {
 }
 
 function writeReport(payload) {
+  let text;
+  try {
+    text = JSON.stringify(payload, null, 2) + "\n";
+  } catch (error) {
+    // The listing can hold values that do not serialize: the report still
+    // goes out, with the reason instead of the payload.
+    text = JSON.stringify(
+      {
+        route: payload?.route ?? "mcp",
+        ok: false,
+        error: `el reporte no se pudo serializar: ${error?.message ?? error}`,
+      },
+      null,
+      2,
+    ) + "\n";
+  }
   try {
     mkdirSync(configDir(), { recursive: true });
-    writeFileSync(join(configDir(), REPORT_NAME), JSON.stringify(payload, null, 2) + "\n");
+    writeFileSync(join(configDir(), REPORT_NAME), text);
   } catch (error) {
     // A diagnostic file is never worth failing a session over.
   }
@@ -187,6 +203,7 @@ async function setupV2(ctx) {
         recorded = true;
         lastCount = names.length;
         writeReport({
+          route: "mcp",
           ...readReport(),
           ok: names.length > 0,
           tools: names.sort(),
