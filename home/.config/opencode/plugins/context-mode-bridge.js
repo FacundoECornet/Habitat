@@ -61,6 +61,23 @@ function writeReport(payload) {
 // 1.x contract: nothing to do here, the real context-mode plugin is in charge.
 export const ContextModeBridgePlugin = async () => ({});
 
+// The V2 API returns paginated results, so the list can be an array or an
+// object with the page inside. Both shapes are accepted.
+function serverList(result) {
+  if (Array.isArray(result)) return result;
+  if (!result || typeof result !== "object") return [];
+  for (const key of ["items", "data", "servers", "results", "list"]) {
+    if (Array.isArray(result[key])) return result[key];
+  }
+  return [];
+}
+
+function serverStatus(entry) {
+  const status = entry?.status;
+  if (typeof status === "string") return status;
+  return status?.status ?? "unknown";
+}
+
 // 2.x contract: register context-mode's MCP server and report its state.
 async function setupV2(ctx) {
   // Only a 2.x host has the mcp domain; on 1.x this stays inert.
@@ -81,19 +98,19 @@ async function setupV2(ctx) {
     // The transform is already applied; a failed reload is not fatal.
   }
 
+  let status = "unknown";
+  let error = null;
   try {
-    const servers = await ctx.mcp.list();
-    const entry = (servers ?? []).find((server) => server?.name === SERVER_NAME);
-    const status = entry?.status?.status ?? "unknown";
-    writeReport({
-      route: "mcp",
-      ok: status === "connected",
-      status,
-      error: entry?.status?.error ?? null,
-    });
-  } catch (error) {
-    writeReport({ route: "mcp", ok: false, error: String(error?.message ?? error) });
+    const servers = serverList(await ctx.mcp.list());
+    const entry = servers.find((server) => server?.name === SERVER_NAME);
+    status = serverStatus(entry);
+    error = entry?.status?.error ?? null;
+  } catch (error_) {
+    error = String(error_?.message ?? error_);
   }
+  // `ok` stays false until a session proves the tools reached the model: the
+  // server being up is not the same as the tools being exposed.
+  writeReport({ route: "mcp", ok: false, status, error });
 
   // The session context carries the tools the model actually receives: that
   // is the proof that the `ctx_*` tools are exposed, not only that the server
@@ -106,7 +123,7 @@ async function setupV2(ctx) {
         const names = Object.keys(input.tools).filter((name) => name.startsWith("ctx_"));
         if (names.length === 0) return;
         recorded = true;
-        writeReport({ ...readReport(), tools: names.sort() });
+        writeReport({ ...readReport(), ok: true, tools: names.sort() });
       });
     } catch (error) {
       // A diagnostic hook must never break a request.

@@ -82,14 +82,14 @@ test("opencode-cli: en la línea 1.x con el plugin nativo todo esta bien", (t) =
 test("opencode-cli: en la línea 2.x con el puente todo esta bien", (t) => {
   const home = homeWith(t, {
     plugins: [BRIDGE],
-    report: { route: "mcp", ok: true, status: "connected" },
+    report: { route: "mcp", ok: true, status: "connected", tools: ["ctx_stats", "ctx_execute"] },
   });
   const cli = fakeCli(t, "2.1.0");
 
   const check = runVerifyWithCli(home, cli);
   assert.equal(check.ok, true, check.detail);
   assert.match(check.detail, /puente \(MCP\)/);
-  assert.match(check.detail, /servidor conectado/);
+  assert.match(check.detail, /2 herramientas ctx_\* disponibles/);
 });
 
 test("opencode-cli: en la línea 2.x sin puente falla con el hint de reinstalar", (t) => {

@@ -215,8 +215,8 @@ test("plugin puente: en un host 2.x registra el MCP de context-mode", async (t) 
   assert.equal(fs.existsSync(report), true, "deja el reporte de ruta");
   const parsed = JSON.parse(fs.readFileSync(report, "utf8"));
   assert.equal(parsed.route, "mcp");
-  assert.equal(parsed.ok, true);
-  assert.equal(parsed.status, "connected");
+  assert.equal(parsed.status, "connected", "el servidor MCP está arriba");
+  assert.equal(parsed.ok, false, "sin sesion todavia no se confirman las herramientas");
 });
 
 test("plugin puente: si el MCP no levanta, el reporte lo dice", async (t) => {
@@ -264,6 +264,7 @@ test("plugin puente: el contexto de sesion deja ver las herramientas ctx_*", asy
   const report = path.join(home, ".config", "opencode", ".habitat-context-mode.json");
   const parsed = JSON.parse(fs.readFileSync(report, "utf8"));
   assert.deepEqual(parsed.tools, ["ctx_execute", "ctx_stats"], "solo las herramientas ctx_* se anotan");
+  assert.equal(parsed.ok, true, "con las herramientas observadas el reporte queda en verde");
 });
 
 test("plugin graphify: sin grafo no toca el comando", async (t) => {

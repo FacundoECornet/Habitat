@@ -219,22 +219,27 @@ function checkOpencodeCli(home) {
       );
       return;
     }
-    if (report && report.ok === false) {
+    if (report && report.ok === false && report.error) {
       check(
         "opencode-cli",
         false,
-        `OpenCode ${version}: el puente de context-mode está declarado pero el servidor MCP no levantó (${report.status ?? "sin estado"})`,
+        `OpenCode ${version}: el puente de context-mode no pudo registrar el MCP (${report.error})`,
         "revisá que `context-mode` esté instalado globalmente (`npm i -g context-mode`) y corré `context-mode doctor`",
       );
       return;
     }
+    const tools = Array.isArray(report?.tools) ? report.tools.length : 0;
     const detail = native
       ? `OpenCode ${version}: context-mode va por el puente (MCP); el plugin nativo declarado no carga en 2.x — corré \`node tools/install.mjs\` para quitarlo`
       : `OpenCode ${version}: context-mode va por el puente (MCP)`;
     check(
       "opencode-cli",
       true,
-      report && report.ok ? `${detail} — servidor conectado` : detail,
+      tools > 0
+        ? `${detail} — ${tools} herramientas ctx_* disponibles`
+        : report
+          ? `${detail} — el servidor está registrado, todavía sin sesión que confirme las herramientas`
+          : detail,
       "",
     );
     return;

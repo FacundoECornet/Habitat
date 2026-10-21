@@ -276,7 +276,7 @@ jobs:
               const fs = require("fs");
               const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
               if (report.route !== "mcp") throw new Error("la ruta no es mcp: " + report.route);
-              if (report.ok !== true) throw new Error("el servidor MCP no conectó: " + JSON.stringify(report));
+              if (report.ok !== true) throw new Error("el puente no confirmó las herramientas: " + JSON.stringify(report));
               const tools = report.tools || [];
               if (tools.length < 11) throw new Error("faltan herramientas ctx_*: " + tools.length);
               console.log("ok: " + tools.length + " herramientas ctx_* disponibles");
