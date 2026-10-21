@@ -17,6 +17,7 @@ import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { PROFILE_NAMES, loadOverlay, mergeOverlay } from "../lib/model-pick.mjs";
 import { openCodeZenApiKey } from "../lib/opencode-auth.mjs";
 import { findExecutable } from "../lib/exec-path.mjs";
@@ -354,15 +355,36 @@ function checkJevMcp(home) {
     );
     return;
   }
-  const result = runTool("opencode", ["mcp", "list"], 20000);
-  const output = [result.stdout, result.stderr].filter(Boolean).join("\n").replace(/\u001b\[[0-9;]*m/g, "");
-  const line = output.split(/\r?\n/).find((entry) => /\bjev\b/i.test(entry));
-  const ok = result.status === 0 && line && !/(?:failed|timeout|✗|error)/i.test(line);
+  // The verdict is the MCP handshake itself, not `opencode mcp list`: that
+  // listing changed shape between the 1.x and 2.x lines of OpenCode, and on 2.x
+  // it no longer mentions the server even when the connection works. The CLI
+  // listing is kept as information, not as the verdict.
+  const probe = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "mcp-probe.mjs");
+  const probed = runTool(process.execPath, [probe, expectedShim, "jev_classify"], 25000);
+  const probeOutput = String(probed.stdout ?? "").trim();
+  if (probed.status !== 0) {
+    const listing = runTool("opencode", ["mcp", "list"], 20000);
+    const listed = [listing.stdout, listing.stderr]
+      .filter(Boolean)
+      .join("\n")
+      .replace(/\[[0-9;]*m/g, "");
+    const line = listed.split(/\r?\n/).find((entry) => /\bjev\b/i.test(entry));
+    check(
+      "jev-mcp",
+      false,
+      `el servidor MCP de JEV no respondió: ${probeOutput || probed.stderr?.trim() || "sin salida"}`,
+      `revisá el launcher ${expectedShim} y la dependencia @jkudish/jev-mcp; \`opencode mcp list\`: ${line?.trim() || "no lo lista"}`,
+    );
+    return;
+  }
+  const listing = runTool("opencode", ["mcp", "list"], 20000);
+  const listed = [listing.stdout, listing.stderr].filter(Boolean).join("\n").replace(/\[[0-9;]*m/g, "");
+  const line = listed.split(/\r?\n/).find((entry) => /\bjev\b/i.test(entry));
   check(
     "jev-mcp",
-    Boolean(ok),
-    ok ? line.trim() : line?.trim() || `OpenCode no confirmó conexión${result.error ? `: ${result.error.message}` : ""}`,
-    "ejecutá `opencode.cmd --print-logs --log-level DEBUG mcp list` (Windows) o `opencode --print-logs --log-level DEBUG mcp list`; revisá JEV MCP y OpenCode Zen",
+    true,
+    `jev_classify anunciado por el servidor MCP${line ? ` (${line.trim()})` : ""}`,
+    "",
   );
 }
 

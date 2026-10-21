@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -89,7 +89,7 @@ function v2McpContext() {
 }
 
 test("plugin caveman: el modulo exporta las dos formas", async () => {
-  const mod = await import(cavemanPath);
+  const mod = await import(pathToFileURL(cavemanPath).href);
   assert.equal(typeof mod.default, "object");
   assert.equal(mod.default.id, "habitat-caveman");
   assert.equal(typeof mod.default.server, "function", "la forma 1.x es `server`");
@@ -97,7 +97,7 @@ test("plugin caveman: el modulo exporta las dos formas", async () => {
 });
 
 test("plugin graphify: el modulo exporta las dos formas", async () => {
-  const mod = await import(graphifyPath);
+  const mod = await import(pathToFileURL(graphifyPath).href);
   assert.equal(typeof mod.default, "object");
   assert.equal(mod.default.id, "habitat-graphify");
   assert.equal(typeof mod.default.server, "function");
@@ -105,7 +105,7 @@ test("plugin graphify: el modulo exporta las dos formas", async () => {
 });
 
 test("plugin caveman: la forma 1.x devuelve los hooks de 1.x", async () => {
-  const mod = await import(cavemanPath);
+  const mod = await import(pathToFileURL(cavemanPath).href);
   const hooks = await mod.default.server({});
   assert.equal(typeof hooks["chat.message"], "function");
   assert.equal(typeof hooks["experimental.chat.system.transform"], "function");
@@ -114,27 +114,27 @@ test("plugin caveman: la forma 1.x devuelve los hooks de 1.x", async () => {
 });
 
 test("plugin graphify: la forma 1.x devuelve el hook de bash", async () => {
-  const mod = await import(graphifyPath);
+  const mod = await import(pathToFileURL(graphifyPath).href);
   const hooks = await mod.default.server({ directory: "/tmp" });
   assert.equal(typeof hooks["tool.execute.before"], "function");
 });
 
 test("plugin caveman: en un host 1.x la forma 2.x no registra nada", async () => {
-  const mod = await import(cavemanPath);
+  const mod = await import(pathToFileURL(cavemanPath).href);
   const { ctx, registered } = v1SetupContext();
   await mod.default.setup(ctx);
   assert.deepEqual(registered, [], "sin dominio session no hay hooks que registrar");
 });
 
 test("plugin graphify: en un host 1.x la forma 2.x no registra nada", async () => {
-  const mod = await import(graphifyPath);
+  const mod = await import(pathToFileURL(graphifyPath).href);
   const { ctx, registered } = v1SetupContext();
   await mod.default.setup(ctx);
   assert.deepEqual(registered, [], "sin dominio tool no hay hooks que registrar");
 });
 
 test("plugin caveman: en un host 2.x registra prompt y context", async () => {
-  const mod = await import(cavemanPath);
+  const mod = await import(pathToFileURL(cavemanPath).href);
   const { ctx, registered } = v2Context();
   await mod.default.setup(ctx);
   assert.deepEqual(
@@ -145,7 +145,7 @@ test("plugin caveman: en un host 2.x registra prompt y context", async () => {
 });
 
 test("plugin graphify: en un host 2.x registra el hook de herramienta", async () => {
-  const mod = await import(graphifyPath);
+  const mod = await import(pathToFileURL(graphifyPath).href);
   const { ctx, registered } = v2Context();
   await mod.default.setup(ctx);
   assert.deepEqual(registered.tool.map((h) => h.name), ["execute.before"]);
@@ -153,7 +153,7 @@ test("plugin graphify: en un host 2.x registra el hook de herramienta", async ()
 });
 
 test("plugin graphify: en 2.x el recordatorio precede al comando de bash", async (t) => {
-  const mod = await import(graphifyPath);
+  const mod = await import(pathToFileURL(graphifyPath).href);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-graphify-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   fs.mkdirSync(path.join(dir, "graphify-out"), { recursive: true });
@@ -171,14 +171,14 @@ test("plugin graphify: en 2.x el recordatorio precede al comando de bash", async
 });
 
 test("plugin puente: el modulo exporta las dos formas", async () => {
-  const mod = await import(bridgePath);
+  const mod = await import(pathToFileURL(bridgePath).href);
   assert.equal(mod.default.id, "habitat-context-mode-bridge");
   assert.equal(typeof mod.default.server, "function");
   assert.equal(typeof mod.default.setup, "function");
 });
 
 test("plugin puente: en un host 1.x no hace nada", async () => {
-  const mod = await import(bridgePath);
+  const mod = await import(pathToFileURL(bridgePath).href);
   const { ctx, calls } = v2McpContext();
   delete ctx.mcp;
   await mod.default.setup(ctx);
@@ -194,7 +194,7 @@ test("plugin puente: en un host 2.x registra el MCP de context-mode", async (t) 
     fs.rmSync(home, { recursive: true, force: true });
   });
 
-  const mod = await import(`${bridgePath}?home=${home}`);
+  const mod = await import(`${pathToFileURL(bridgePath).href}?home=${encodeURIComponent(home)}`);
   const { ctx, calls } = v2McpContext();
   await mod.default.setup(ctx);
 
@@ -220,7 +220,7 @@ test("plugin puente: si el MCP no levanta, el reporte lo dice", async (t) => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
-  const mod = await import(`${bridgePath}?home=${home}`);
+  const mod = await import(`${pathToFileURL(bridgePath).href}?home=${encodeURIComponent(home)}`);
   const { ctx } = v2McpContext();
   ctx.mcp.list = async () => [{ name: "context-mode", status: { status: "failed", error: "boom" } }];
   await mod.default.setup(ctx);
@@ -241,7 +241,7 @@ test("plugin puente: el contexto de sesion deja ver las herramientas ctx_*", asy
     fs.rmSync(home, { recursive: true, force: true });
   });
 
-  const mod = await import(`${bridgePath}?tools=${home}`);
+  const mod = await import(`${pathToFileURL(bridgePath).href}?tools=${encodeURIComponent(home)}`);
   const { ctx } = v2McpContext();
   const sessionHooks = [];
   ctx.session = {
@@ -269,7 +269,7 @@ test("plugin puente: el contexto de sesion deja ver las herramientas ctx_*", asy
 });
 
 test("plugin graphify: sin grafo no toca el comando", async (t) => {
-  const mod = await import(graphifyPath);
+  const mod = await import(pathToFileURL(graphifyPath).href);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-graphify-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
