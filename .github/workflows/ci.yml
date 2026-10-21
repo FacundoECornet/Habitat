@@ -164,9 +164,9 @@ jobs:
   # The plugin contract changed between OpenCode 1.x and 2.x, and the two lines
   # are installed by different channels (npm keeps 1.x, Homebrew already
   # tracks 2.x). This job runs the payload against both: on 1.x the native
-  # context-mode plugin provides the tools, on 2.x the bridge plugin registers
-  # context-mode's MCP server. The probe reads the report the bridge writes,
-  # which carries the tools the model actually received.
+  # context-mode plugin provides the tools; on 2.x a 1.x plugin does not load,
+  # so the installer declares context-mode's MCP server instead. The probe reads
+  # the CLI's MCP listing, which shows the tools it exposes.
   plugin-compat:
     name: OpenCode ${{ matrix.cli }}
     runs-on: macos-latest
@@ -230,17 +230,18 @@ jobs:
               .replace(/\/\*[\s\S]*?\*\//g, "")
               .replace(/(^|\s+)\/\/[^\n]*/g, "$1")
               .replace(/,(\s*[}\]])/g, "$1");
-            const plugins = JSON.parse(clean).plugin || [];
+            const config = JSON.parse(clean);
+            const plugins = config.plugin || [];
             const native = plugins.includes("context-mode");
-            const bridge = plugins.some((p) => String(p).includes("context-mode-bridge"));
+            const mcp = Boolean((config.mcp || {})["context-mode"]);
             const want = process.argv[2];
             if (want === "1.x") {
               if (!native) { console.error("::error::en la línea 1.x el plugin nativo de context-mode tiene que seguir declarado"); process.exit(1); }
               console.log("ok: el plugin nativo sigue declarado");
             } else {
               if (native) { console.error("::error::en la línea 2.x el plugin nativo de context-mode no carga: el instalador tenía que sacarlo"); process.exit(1); }
-              if (!bridge) { console.error("::error::falta el plugin puente de context-mode"); process.exit(1); }
-              console.log("ok: el puente quedó declarado y el nativo fuera");
+              if (!mcp) { console.error("::error::en la línea 2.x context-mode tiene que estar declarado como servidor MCP"); process.exit(1); }
+              console.log("ok: el servidor MCP quedó declarado y el plugin nativo fuera");
             }
           ' "$config" "${{ matrix.source == 'npm' && '1.x' || '2.x' }}"
 
