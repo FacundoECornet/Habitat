@@ -19,7 +19,7 @@ flowchart LR
     end
     subgraph DST[Máquina destino]
         ENG[restore.mjs<br/>backup + copia + npm ci]
-        VER[verify.mjs<br/>6 comprobaciones]
+        VER[verify.mjs<br/>10 comprobaciones]
         NEW[Entorno vivo]
     end
     LIVE --> CAP --> PAYLOAD
@@ -55,7 +55,7 @@ El destino nunca se borra: lo que va a ser pisado se copia antes a
 
 ## 3. Verificación
 
-`node tools/verify.mjs` corre nueve comprobaciones y devuelve código de salida 0
+`node tools/verify.mjs` corre diez comprobaciones y devuelve código de salida 0
 solo si todas pasan:
 
 | Check | Qué garantiza |
@@ -66,6 +66,7 @@ solo si todas pasan:
 | `jev-mcp` | El MCP de JEV responde — o queda en `skip` si no hay credencial de OpenCode Zen. |
 | `cli-tools` | `gsd-sdk` y `graphify` responden; si no están instalados, se informa en verde. (`--no-cli` lo omite) |
 | `plugins` | Cada plugin declarado (local o npm) resuelve. |
+| `opencode-cli` | Qué línea de OpenCode se está usando y por qué vía llega context-mode; falla si no llega por ninguna. |
 | `discovery` | Skills y agentes son descubribles y no están duplicados entre roots. |
 | `archify` | La skill de Archify viene completa y su doctor responde. |
 | `model-ids` | Cada modelo configurado existe en el catálogo de OpenCode. (`--no-models` lo omite) |
@@ -134,7 +135,43 @@ Además, un job semanal revisa el catálogo de modelos de OpenCode y abre un
 issue con la lista exacta de agentes y perfiles afectados cuando un ID público
 se retira del catálogo.
 
-## 6. Capturar tu propio snapshot
+## 6. Las dos líneas de OpenCode
+
+OpenCode 2.x no comparte el contrato de plugins con 1.x: 1.x llama `server(ctx)`
+y 2.x llama `setup(ctx)`, y solo acepta un default export con `id` + `setup`. Un
+plugin escrito para 1.x no carga en 2.x.
+
+El MCP **sí** es el mismo en las dos líneas, así que es la vía estable:
+
+```mermaid
+flowchart LR
+    CLI{opencode --version}
+    CLI -->|1.x| P1[plugin nativo de context-mode<br/>en proceso]
+    CLI -->|2.x| P2[plugin nativo: NO carga<br/>el host lo loguea como error]
+    CLI -->|2.x| M[context-mode declarado<br/>como servidor MCP (hijo stdio)]
+    P1 --> T[las herramientas ctx_*]
+    M --> T
+```
+
+- El **instalador** lee la versión del CLI y adapta la config: en 1.x declara el
+  plugin nativo; en 2.x lo quita y declara el servidor MCP.
+- El **check `opencode-cli`** dice en verde qué línea estás usando y por qué vía
+  llega context-mode, y falla si no llega por ninguna. Antes, un plugin que no
+  cargaba pasaba la verificación en verde.
+- El check `jev-mcp` ya no se apoya en `opencode mcp list` (su formato cambió
+  entre líneas) sino en un handshake JSON-RPC contra el launcher, igual que un
+  cliente MCP real.
+- Los plugins del payload (Caveman, Graphify) exportan las dos formas. El guard
+  de `setup` (sin dominio `session`/`tool` no hace nada) deja la parte 2.x
+  inerte en 1.x, que también invoca `setup` pero con un contexto parcial: así
+  ningún hook queda registrado dos veces.
+- Queda fuera en 2.x: los hooks de routing de context-mode, hasta que upstream
+  publique su entrada 2.x (el fix ya está en su repo, sin publicar).
+
+La CI corre las dos líneas (`OpenCode 1.19.3` y `OpenCode 2.1.0`) sobre el
+payload, no solo sobre una.
+
+## 7. Capturar tu propio snapshot
 
 `scripts/capture.sh` relee tu entorno y actualiza el payload del repo. Es
 re-ejecutable, soporta `--dry-run` y nunca commitea secretos ni junk.
