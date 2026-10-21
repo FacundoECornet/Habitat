@@ -205,7 +205,9 @@ jobs:
 
       - name: Install the payload into a sandbox home
         run: |
+          # HOME is the sandbox: the launchers resolve the config dir from it.
           export SANDBOX_HOME="$RUNNER_TEMP/habitat-home"
+          export HOME="$SANDBOX_HOME"
           export XDG_DATA_HOME="$RUNNER_TEMP/habitat-data"
           mkdir -p "$SANDBOX_HOME" "$XDG_DATA_HOME/opencode"
           if [ -n "$OPENCODE_AUTH" ]; then
