@@ -268,6 +268,15 @@ jobs:
             opencode run -m opencode/mimo-v2.6-flash-free "decí ok" || true
             report="$HOME/.config/opencode/.habitat-context-mode.json"
             if [ ! -f "$report" ]; then
+              # the host can load the plugin from a copy: look there too
+              for candidate in "$HOME/.config/opencode" "$HOME/.cache/opencode"; do
+                if [ -f "$candidate/.habitat-context-mode.json" ]; then
+                  report="$candidate/.habitat-context-mode.json"
+                  break
+                fi
+              done
+            fi
+            if [ ! -f "$report" ]; then
               echo "::error::el puente no dejó reporte: los plugins no cargaron"
               exit 1
             fi

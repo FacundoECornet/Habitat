@@ -20,7 +20,8 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "context-mode";
 const REPORT_NAME = ".habitat-context-mode.json";
@@ -32,6 +33,21 @@ const REPORT_NAME = ".habitat-context-mode.json";
 function configDir() {
   if (process.env.XDG_CONFIG_HOME) return join(process.env.XDG_CONFIG_HOME, "opencode");
   return join(homedir(), ".config", "opencode");
+}
+
+// The host can load the plugin from a copy (its cache) and the setup and the
+// session can run in different processes, so the report goes to every place
+// it could be read from: the config dir of the host and the dir of the file
+// that was actually loaded.
+function reportDirs() {
+  const dirs = [configDir()];
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    dirs.push(dirname(here));
+  } catch (error) {
+    // The file location is not available: the env one is enough.
+  }
+  return [...new Set(dirs)];
 }
 
 function readReport() {
@@ -59,11 +75,13 @@ function writeReport(payload) {
       2,
     ) + "\n";
   }
-  try {
-    mkdirSync(configDir(), { recursive: true });
-    writeFileSync(join(configDir(), REPORT_NAME), text);
-  } catch (error) {
-    // A diagnostic file is never worth failing a session over.
+  for (const dir of reportDirs()) {
+    try {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, REPORT_NAME), text);
+    } catch (error) {
+      // A diagnostic file is never worth failing a session over.
+    }
   }
 }
 
