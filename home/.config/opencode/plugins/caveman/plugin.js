@@ -226,4 +226,52 @@ export const CavemanPlugin = async (_ctx) => {
   };
 };
 
-export default CavemanPlugin;
+// 2.x contract (opencode 2). Only active on a 2.x host: the 1.x context has
+// no `session` domain, and 1.x calls `setup` too when it is present — the
+// guard keeps the 2.x path inert there, so no hook is ever registered twice.
+//
+// The 2.x API has no `session.created` event hook, so the per-session
+// re-assert of the flag happens on the first prompt of each session
+// (the session id is the marker), and the mode change is read from the
+// prompt text, which the 2.x host delivers as `prompt.text`.
+async function setupV2(ctx) {
+  if (!ctx || typeof ctx.session?.hook !== 'function') return;
+
+  const seenSessions = new Set();
+
+  await ctx.session.hook('prompt', async (input) => {
+    try {
+      const sessionID = input?.sessionID;
+      if (sessionID && !seenSessions.has(sessionID)) {
+        seenSessions.add(sessionID);
+        handleSessionCreated();
+      }
+      const text = typeof input?.prompt?.text === 'string' ? input.prompt.text : '';
+      if (text) {
+        const change = parseModeChange(text);
+        if (change) applyModeChange(change);
+      }
+    } catch (error) {
+      // A hook must never break the prompt it is reading.
+    }
+  });
+
+  // The 2.x system context is an array of typed parts, not plain strings.
+  await ctx.session.hook('context', async (input) => {
+    try {
+      if (!input || !Array.isArray(input.system)) return;
+      const active = readFlag(flagPath);
+      if (active && !INDEPENDENT_MODES.has(active)) {
+        input.system.push({ type: 'text', text: reinforcementLine(active) });
+      }
+    } catch (error) {
+      // Same: never break the request.
+    }
+  });
+}
+
+export default {
+  id: 'habitat-caveman',
+  server: CavemanPlugin,
+  setup: setupV2,
+};

@@ -92,6 +92,10 @@ sobre un home temporal **fuera** del repositorio.
 Los 18 `skip` en Windows son las suites de la herramienta Bash (`capture.sh` y el scanner de
 rutas): necesitan `rsync`, que no existe ahí. La captura en Windows se hace desde WSL.
 
+En la rama `feat/opencode-2x` (la que trae la línea 2.x) la suite subió a **107 tests**:
+Linux y macOS con 107/107 en verde, y Windows con 86 pass + 21 skip (los mismos de `rsync`,
+más las suites que no corren ahí), 0 fail.
+
 ### macOS, en detalle
 
 El job de macOS corre sobre un **macOS real de Apple Silicon** (`macos-26-arm64`), no sobre
@@ -125,6 +129,33 @@ humana de arriba es de Linux/WSL y de Windows nativo. Para macOS, la prueba es l
 El job semanal del catálogo de modelos corre una vez por semana sobre el CLI de OpenCode y
 abre un issue con la lista exacta de agentes y perfiles afectados cuando un ID público se
 retira del catálogo.
+
+## CI: las dos líneas de OpenCode
+
+OpenCode 2.x no comparte el contrato de plugins con 1.x, así que la CI corre el payload
+contra **las dos líneas**. El job instala el CLI, restaura el payload en un home temporal y
+comprueba que context-mode quede disponible por la vía que corresponde a esa línea.
+
+- **Fecha:** 2026-10-21 · **Commit:** `0bd9f5c` (`feat/opencode-2x`) · **Workflow:** `ci.yml`
+
+| Línea | Instalación | Qué prueba | Resultado |
+|---|---|---|---|
+| 1.19.3 | npm | El plugin nativo carga y expone las 11 herramientas `ctx_*` | en verde |
+| 2.1.0 | Homebrew (binario `v2.0.25`) | El plugin nativo queda fuera y el servidor MCP de context-mode levanta y conecta | en verde |
+
+Salida del job de la línea 2.x:
+
+```text
+OpenCode: opencode v2.0.25
+ok: el servidor MCP quedó declarado y el plugin nativo fuera
+✓ context-mode  connected
+ok: el servidor MCP de context-mode está conectado
+```
+
+**Lo que esto no cubre:** en la línea 2.x la prueba es que el servidor MCP levanta y conecta,
+no que una sesión real use las herramientas: eso necesita credencial y sesión, y no corresponde
+a una corrida pública. Los hooks de routing de context-mode siguen fuera en 2.x hasta que
+upstream publique su entrada 2.x.
 
 ## Nota
 

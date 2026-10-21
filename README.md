@@ -37,6 +37,7 @@ herramientas) que podés restaurar en otra máquina con un comando, sin copiar a
 
 Necesitás **[Git](https://git-scm.com/downloads)**, **[Node.js/npm](https://nodejs.org/en/download)**
 y **[OpenCode](https://opencode.ai/docs/)** instalados. Node.js **22.22.2+**, **24.15+** o **26+**.
+**OpenCode 1.x o 2.x**: la CI prueba las dos líneas (**1.19.3** y **2.1.0**).
 
 **No hace falta cuenta de OpenCode Zen para instalar**: sin credencial, todo el framework
 funciona (GSD, agentes, skills, plugins, restore y verificación) y solo quedan desactivados
@@ -95,6 +96,24 @@ Después de instalar, cerrá y volvé a abrir OpenCode para cargar el MCP global
 > `checker`): cada modelo se aplica a todos los sub-agentes de ese rol. `Enter` mantiene,
 > `!` vuelve al default del repo y `q` termina.
 
+## OpenCode 1.x y 2.x
+
+Las dos líneas de OpenCode están soportadas, y no se comportan igual.
+
+| | 1.x | 2.x |
+|---|---|---|
+| Plugin nativo (en proceso) | Sí | No carga: el host solo acepta un default export con `id` + `setup` |
+| context-mode | Por su plugin | Por su **servidor MCP** (el mismo hijo stdio) |
+| Herramientas `ctx_*` | Sí | Sí |
+| Hooks de routing de context-mode | Sí | No, hasta que upstream publique su entrada 2.x |
+
+El instalador lee la versión del CLI y adapta la config: en 1.x declara el plugin nativo, en 2.x
+lo quita (no carga y el host lo loguea como error) y declara el servidor MCP de context-mode. Los
+comandos y las herramientas son los mismos en las dos líneas.
+
+Lo que queda atrás en 2.x son los hooks de routing de context-mode: el fix ya está en el
+upstream, pero sin publicar. Cuando salga, basta con reinstalar.
+
 ## Verificación
 
 El instalador restaura la configuración y corre la verificación al final. Podés volver a
@@ -112,6 +131,7 @@ node tools/verify.mjs
 | `jev-mcp` | El MCP de JEV responde — o queda en `skip` si no hay credencial de OpenCode Zen. |
 | `cli-tools` | `gsd-sdk` y `graphify` responden; si no están instalados, se informa en verde. |
 | `plugins` | Cada plugin declarado (local o npm) resuelve. |
+| `opencode-cli` | Qué línea de OpenCode estás usando y por qué ruta llega context-mode; falla si no llega por ninguna. |
 | `discovery` | Skills y agentes son descubribles y no están duplicados. |
 | `archify` | La skill de Archify viene completa y su doctor responde. |
 | `model-ids` | Cada modelo configurado existe en el catálogo de OpenCode. |
@@ -183,6 +203,7 @@ Graphify es opcional y requiere Python 3. Sin Python, el resto de Habitat sigue 
 | `npm ci` falla con `UNABLE_TO_VERIFY_LEAF_SIGNATURE` | Habitat reintenta con el almacén de CA del sistema. Si tampoco alcanza: `NODE_EXTRA_CA_CERTS=/ruta/a/ca.crt`. |
 | PowerShell bloquea `npm.ps1` | Usá `npm.cmd` en vez de `npm` (`npm.cmd test`). |
 | `verify` falla en `model-ids` | `opencode auth login` y volvé a correr `node tools/verify.mjs`. |
+| `verify` falla en `opencode-cli` | El CLI no está en el PATH, o context-mode no quedó declarado por ninguna vía. `node tools/install.mjs` lo adapta a la línea 1.x o 2.x que tengas. |
 | El MCP `jev` no levanta | Confirmá `OpenCode Zen` con `opencode.cmd auth list` (Windows) o `opencode auth list` (Linux/macOS) y reconectá. Diagnóstico: `opencode --print-logs --log-level DEBUG mcp list`. |
 | `jev` no aplica perfil | `gsd-route easy|medium|hard` para elegir perfil manualmente. |
 | `graphify` no está disponible | Instalá Python 3 y volvé a correr `node tools/install.mjs --with-deps`. |
@@ -203,9 +224,10 @@ Ver [`docs/CAPTURE.md`](docs/CAPTURE.md).
 
 Etapa 1 cerrada: restore, verificación, captura, GSD, skills y plugins funcionan en Windows,
 Linux, macOS y WSL. Las tres plataformas corren en CI, con los tests, los gates del repo y un
-smoke de instalación sobre un home limpio. Un job semanal revisa el catálogo de modelos de
-OpenCode y avisa (con un issue) cuando se retira un ID, antes de que le rompa la instalación a
-alguien.
+smoke de instalación sobre un home limpio. La CI prueba además las dos líneas de OpenCode
+(1.19.3 y 2.1.0), porque el contrato de plugins cambió entre ellas. Un job semanal revisa el
+catálogo de modelos de OpenCode y avisa (con un issue) cuando se retira un ID, antes de que le
+rompa la instalación a alguien.
 
 Lo que sigue está en el [CHANGELOG](CHANGELOG.md).
 

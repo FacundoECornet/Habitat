@@ -4,7 +4,10 @@ Todas las novedades de Habitat se registran acá, siguiendo
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 [Versionado Semántico](https://semver.org/lang/es/).
 
-## [Unreleased]
+## [0.3.0] - 2026-10-21
+
+Compatibilidad con la línea 2.x de OpenCode: el payload se adapta a las dos líneas y la
+verificación dice por qué vía llega context-mode.
 
 ### Agregado
 
@@ -12,13 +15,40 @@ Todas las novedades de Habitat se registran acá, siguiendo
   (`core.hooksPath=.githooks`): hasta ahora habia que activarlo a mano en cada clon. Es
   configuracion local del repo (la global de Git no se toca) y un `core.hooksPath` propio del
   usuario no se pisa.
+- **Nuevo check `opencode-cli`** en `verify`: lee la versión del CLI y dice en verde qué línea de
+  OpenCode está en uso y por qué vía llega context-mode (plugin nativo o servidor MCP). Falla si
+  no llega por ninguna vía, y avisa cuando el plugin nativo quedó declarado en la línea 2.x,
+  donde no carga. Antes, un plugin que no cargaba pasaba la verificación en verde.
+- **CI con las dos líneas de OpenCode**: los jobs `OpenCode 1.19.3` (npm) y `OpenCode 2.1.0`
+  (Homebrew) corren el payload contra cada línea y comprueban que context-mode quede
+  disponible por la vía que corresponde. El job de la línea 2.x no necesita credencial ni
+  sesión: basta con que el servidor MCP levante y conecte.
+
+### Cambiado
+
+- **El payload se adapta a la línea del CLI.** El contrato de plugins cambió entre 1.x y 2.x:
+  1.x llama `server(ctx)` y 2.x llama `setup(ctx)`, y solo acepta un default export con `id` +
+  `setup`. Un plugin escrito para 1.x no carga en 2.x. Los plugins del payload (Caveman,
+  Graphify) exportan las dos formas, y el guard de `setup` deja la parte 2.x inerte en 1.x: así
+  ningún hook queda registrado dos veces.
+- **En la línea 2.x, context-mode va por su servidor MCP.** El transporte MCP no cambió entre
+  las dos líneas, así que el instalador quita el plugin nativo (en 2.x no carga y el host lo
+  loguea como error) y declara el servidor MCP de context-mode: el mismo hijo stdio y las
+  mismas herramientas `ctx_*`. En la línea 1.x sigue yendo por su plugin nativo.
+- **`jev-mcp` ya no se apoya en `opencode mcp list`.** El formato de ese listado cambió entre
+  líneas (en 2.x ya no menciona el servidor), y el check daba por rota una conexión que
+  funcionaba. Ahora el veredicto es un handshake JSON-RPC contra el launcher, igual que un
+  cliente MCP real; el listado del CLI queda como información.
 
 ### Documentacion
 
-- Toda la documentacion esta al dia con el estado actual: los nueve checks de `verify`, la
+- Toda la documentacion esta al dia con el estado actual: los diez checks de `verify`, la
   regla del catalogo completo, las tres plataformas en CI, el veredicto de drift de la captura,
   el alcance del gate de secretos, el secreto del job de catalogo y la auditoria de exposicion
   (0 coincidencias de claves, rutas personales o identidades en todo lo publicado).
+- `README.md`, `docs/ARCHITECTURE.md` y `docs/EVIDENCE.md` explican ahora las dos líneas de
+  OpenCode: qué cambia en 2.x, cómo llega context-mode en cada una, y por qué los hooks de
+  routing de context-mode quedan fuera de 2.x hasta que upstream publique su entrada 2.x.
 
 ## [0.2.1] - 2026-10-20
 
@@ -239,6 +269,7 @@ interno.
 git clone https://github.com/FacundoECornet/Habitat.git ~/code/habitat
 ```
 
+[0.3.0]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.3.0
 [0.2.1]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.2.1
 [0.2.0]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.2.0
 [0.1.6]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.1.6

@@ -161,6 +161,120 @@ jobs:
           node tools/install.mjs --home "$test_home" --repo . --no-pick-models
           node tools/verify.mjs --home "$test_home" --repo . --no-models --no-cli
 
+  # The plugin contract changed between OpenCode 1.x and 2.x, and the two lines
+  # are installed by different channels (npm keeps 1.x, Homebrew already
+  # tracks 2.x). This job runs the payload against both: on 1.x the native
+  # context-mode plugin provides the tools; on 2.x a 1.x plugin does not load,
+  # so the installer declares context-mode's MCP server instead. The probe reads
+  # the CLI's MCP listing, which shows the tools it exposes.
+  plugin-compat:
+    name: OpenCode ${{ matrix.cli }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cli: '1.19.3'
+            source: npm
+          - cli: '2.1.0'
+            source: brew
+    env:
+      OPENCODE_AUTH: ${{ secrets.OPENCODE_AUTH }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix home/.config/opencode --no-audit --no-fund
+
+      - name: Install the OpenCode CLI
+        run: |
+          if [ "${{ matrix.source }}" = "npm" ]; then
+            npm install -g opencode-ai@${{ matrix.cli }}
+          else
+            brew install opencode
+          fi
+          opencode --version
+
+      - name: Install the payload into a sandbox home
+        run: |
+          # HOME is the sandbox: the launchers resolve the config dir from it.
+          export SANDBOX_HOME="$RUNNER_TEMP/habitat-home"
+          export HOME="$SANDBOX_HOME"
+          export XDG_DATA_HOME="$RUNNER_TEMP/habitat-data"
+          mkdir -p "$SANDBOX_HOME" "$XDG_DATA_HOME/opencode"
+          if [ -n "$OPENCODE_AUTH" ]; then
+            printf '%s' "$OPENCODE_AUTH" > "$XDG_DATA_HOME/opencode/auth.json"
+            chmod 600 "$XDG_DATA_HOME/opencode/auth.json"
+          fi
+          node tools/install.mjs --home "$SANDBOX_HOME" --repo . --no-pick-models
+
+      - name: Check the config adapted to this line
+        run: |
+          export HOME="$RUNNER_TEMP/habitat-home"
+          config="$HOME/.config/opencode/opencode.jsonc"
+          echo "OpenCode: $(opencode --version)"
+          # The plugin array is parsed, not grepped: the config has comments
+          # that mention context-mode.
+          node -e '
+            const fs = require("fs");
+            const raw = fs.readFileSync(process.argv[1], "utf8");
+            const clean = raw
+              .replace(/\/\*[\s\S]*?\*\//g, "")
+              .replace(/(^|\s+)\/\/[^\n]*/g, "$1")
+              .replace(/,(\s*[}\]])/g, "$1");
+            const config = JSON.parse(clean);
+            const plugins = config.plugin || [];
+            const native = plugins.includes("context-mode");
+            const mcp = Boolean((config.mcp || {})["context-mode"]);
+            const want = process.argv[2];
+            if (want === "1.x") {
+              if (!native) { console.error("::error::en la línea 1.x el plugin nativo de context-mode tiene que seguir declarado"); process.exit(1); }
+              console.log("ok: el plugin nativo sigue declarado");
+            } else {
+              if (native) { console.error("::error::en la línea 2.x el plugin nativo de context-mode no carga: el instalador tenía que sacarlo"); process.exit(1); }
+              if (!mcp) { console.error("::error::en la línea 2.x context-mode tiene que estar declarado como servidor MCP"); process.exit(1); }
+              console.log("ok: el servidor MCP quedó declarado y el plugin nativo fuera");
+            }
+          ' "$config" "${{ matrix.source == 'npm' && '1.x' || '2.x' }}"
+
+      - name: Check the ctx_* tools are exposed
+        run: |
+          export HOME="$RUNNER_TEMP/habitat-home"
+          export XDG_DATA_HOME="$RUNNER_TEMP/habitat-data"
+          if [ "${{ matrix.source }}" = "npm" ]; then
+            # The native plugin registers its tools when the CLI loads: the
+            # agent config lists them.
+            count="$(opencode debug agent build | grep -c 'ctx_' || true)"
+            echo "herramientas ctx_* declaradas: $count"
+            if [ "$count" -lt 11 ]; then
+              echo "::error::la línea 1.x debería exponer las 11 herramientas ctx_* (encontradas: $count)"
+              exit 1
+            fi
+            echo "ok: las herramientas ctx_* están expuestas"
+          else
+            # On 2.x context-mode is declared as an MCP server: the listing
+            # shows its tools. No session and no credentials needed.
+            listing="$(opencode mcp list 2>&1 || true)"
+            echo "$listing" | head -30
+            # El listado muestra servidor y estado (no los nombres de las
+            # herramientas): lo que prueba es que el servidor MCP de
+            # context-modeLevanta y conecta en la línea 2.x.
+            if ! printf '%s' "$listing" | grep -iE 'context-mode.*connected' >/dev/null; then
+              echo "::error::en la línea 2.x el servidor MCP de context-mode no está conectado:"
+              echo "$listing"
+              exit 1
+            fi
+            echo "ok: el servidor MCP de context-mode está conectado"
+          fi
+
   # OpenCode retires model ids over time. When that happens the install of
   # every user fails, so the catalog is checked weekly and an issue is opened
   # with the exact list of affected agents and profiles.

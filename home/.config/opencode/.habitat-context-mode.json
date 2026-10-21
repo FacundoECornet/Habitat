@@ -1,0 +1,14 @@
+{
+  "route": "mcp",
+  "ok": true,
+  "tools": [
+    "ctx_execute",
+    "ctx_stats"
+  ],
+  "totalTools": 3,
+  "sampleTools": [
+    "ctx_stats",
+    "ctx_execute",
+    "bash"
+  ]
+}

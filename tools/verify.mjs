@@ -17,6 +17,7 @@ import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { PROFILE_NAMES, loadOverlay, mergeOverlay } from "../lib/model-pick.mjs";
 import { openCodeZenApiKey } from "../lib/opencode-auth.mjs";
 import { findExecutable } from "../lib/exec-path.mjs";
@@ -166,6 +167,101 @@ function checkPortablePaths(home) {
   );
 }
 
+// The plugin contract changed between OpenCode 1.x and 2.x: 1.x calls
+// `server`, 2.x calls `setup` and only accepts a default export with
+// `id` + `setup`. context-mode ships a 1.x plugin, so on 2.x it does not
+// load; the payload carries a bridge that registers context-mode's MCP
+// server there. This check says which line is in use and which route
+// context-mode has, instead of leaving the user with a green verification
+// and a plugin that silently does nothing.
+function checkOpencodeCli(home) {
+  const result = runTool("opencode", ["--version"], 10000);
+  const version = String(result.stdout ?? "").trim();
+  const major = version.match(/(\d+)\./);
+  if (result.error || result.status !== 0 || !major) {
+    skip(
+      "opencode-cli",
+      "no se encontró el CLI de OpenCode",
+      "instalá OpenCode para validar que los plugins del payload cargan en tu versión",
+    );
+    return;
+  }
+  const line = Number(major[1]);
+
+  const configPath = path.join(home, ".config", "opencode", "opencode.jsonc");
+  let plugins = [];
+  let mcpServers = {};
+  try {
+    const parsed = readJsonish(configPath);
+    if (Array.isArray(parsed.plugin)) plugins = parsed.plugin;
+    if (parsed.mcp && typeof parsed.mcp === "object") mcpServers = parsed.mcp;
+  } catch (error) {
+    // A config that does not parse is already reported by `mcp-json`.
+  }
+  const native = plugins.includes("context-mode");
+  const viaMcp = mcpServers["context-mode"] !== undefined;
+
+  if (line >= 2) {
+    // On 2.x the native plugin cannot load; the route is the MCP server.
+    if (native && !viaMcp) {
+      check(
+        "opencode-cli",
+        false,
+        `OpenCode ${version}: el plugin nativo de context-mode no carga en la línea 2.x y no está declarado como servidor MCP`,
+        "corré `node tools/install.mjs` para adaptar la config a la línea 2.x",
+      );
+      return;
+    }
+    if (!viaMcp) {
+      check(
+        "opencode-cli",
+        false,
+        `OpenCode ${version}: context-mode no está declarado por ninguna vía (ni plugin ni MCP)`,
+        "corré `node tools/install.mjs` o declaralo en el bloque mcp de tu opencode.jsonc",
+      );
+      return;
+    }
+    const tools = countCtxTools();
+    check(
+      "opencode-cli",
+      true,
+      `OpenCode ${version}: context-mode va por su servidor MCP${
+        native ? "; el plugin nativo declarado no carga en 2.x — corré \`node tools/install.mjs\` para quitarlo" : ""
+      }${tools > 0 ? ` — ${tools} herramientas ctx_* disponibles` : ""}`,
+      "",
+    );
+    return;
+  }
+
+  if (native) {
+    check("opencode-cli", true, `OpenCode ${version}: context-mode va por su plugin nativo`, "");
+    return;
+  }
+  if (viaMcp) {
+    check(
+      "opencode-cli",
+      true,
+      `OpenCode ${version}: context-mode va por su servidor MCP, no por su plugin nativo`,
+      "corré `node tools/install.mjs` para usar el plugin nativo en la línea 1.x",
+    );
+    return;
+  }
+  skip(
+    "opencode-cli",
+    `OpenCode ${version}: no hay plugin de context-mode declarado`,
+    "si querés context-mode, declaralo en el plugin de tu opencode.jsonc",
+  );
+}
+
+// How many `ctx_*` tools the CLI reports for context-mode. The listing format
+// changed between the 1.x and 2.x lines, so the count is a tolerant match.
+function countCtxTools() {
+  const result = runTool("opencode", ["mcp", "list"], 20000);
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+  const matches = output.match(/ctx_[a-z_]+/gi) ?? [];
+  return new Set(matches.map((name) => name.toLowerCase())).size;
+}
+
 function checkMcp(home, repo) {
   const candidates = [
     path.join(home, ".config", "opencode", "opencode.json"),
@@ -261,15 +357,36 @@ function checkJevMcp(home) {
     );
     return;
   }
-  const result = runTool("opencode", ["mcp", "list"], 20000);
-  const output = [result.stdout, result.stderr].filter(Boolean).join("\n").replace(/\u001b\[[0-9;]*m/g, "");
-  const line = output.split(/\r?\n/).find((entry) => /\bjev\b/i.test(entry));
-  const ok = result.status === 0 && line && !/(?:failed|timeout|✗|error)/i.test(line);
+  // The verdict is the MCP handshake itself, not `opencode mcp list`: that
+  // listing changed shape between the 1.x and 2.x lines of OpenCode, and on 2.x
+  // it no longer mentions the server even when the connection works. The CLI
+  // listing is kept as information, not as the verdict.
+  const probe = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "mcp-probe.mjs");
+  const probed = runTool(process.execPath, [probe, expectedShim, "jev_classify"], 25000);
+  const probeOutput = String(probed.stdout ?? "").trim();
+  if (probed.status !== 0) {
+    const listing = runTool("opencode", ["mcp", "list"], 20000);
+    const listed = [listing.stdout, listing.stderr]
+      .filter(Boolean)
+      .join("\n")
+      .replace(/\[[0-9;]*m/g, "");
+    const line = listed.split(/\r?\n/).find((entry) => /\bjev\b/i.test(entry));
+    check(
+      "jev-mcp",
+      false,
+      `el servidor MCP de JEV no respondió: ${probeOutput || probed.stderr?.trim() || "sin salida"}`,
+      `revisá el launcher ${expectedShim} y la dependencia @jkudish/jev-mcp; \`opencode mcp list\`: ${line?.trim() || "no lo lista"}`,
+    );
+    return;
+  }
+  const listing = runTool("opencode", ["mcp", "list"], 20000);
+  const listed = [listing.stdout, listing.stderr].filter(Boolean).join("\n").replace(/\[[0-9;]*m/g, "");
+  const line = listed.split(/\r?\n/).find((entry) => /\bjev\b/i.test(entry));
   check(
     "jev-mcp",
-    Boolean(ok),
-    ok ? line.trim() : line?.trim() || `OpenCode no confirmó conexión${result.error ? `: ${result.error.message}` : ""}`,
-    "ejecutá `opencode.cmd --print-logs --log-level DEBUG mcp list` (Windows) o `opencode --print-logs --log-level DEBUG mcp list`; revisá JEV MCP y OpenCode Zen",
+    true,
+    `jev_classify anunciado por el servidor MCP${line ? ` (${line.trim()})` : ""}`,
+    "",
   );
 }
 
@@ -557,7 +674,10 @@ function main() {
   checkPortablePaths(options.home);
   checkMcp(options.home, options.repo);
   checkJevMcp(options.home);
-  if (!options.noCli) checkCli();
+  if (!options.noCli) {
+    checkCli();
+    checkOpencodeCli(options.home);
+  }
   checkPlugins(options.home);
   checkDiscovery(options.home);
   checkArchify(options.home);
