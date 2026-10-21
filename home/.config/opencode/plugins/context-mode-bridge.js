@@ -77,22 +77,39 @@ function serverList(result, depth = 0) {
   return [];
 }
 
-// A short description of whatever the listing returned, so a shape change is
-// readable from the report instead of guesswork.
+// A deep search for the server, whatever shape the listing has.
+function findServer(value, depth = 0) {
+  if (!value || typeof value !== "object" || depth > 4) return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findServer(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (value.name === SERVER_NAME) return value;
+  for (const nested of Object.values(value)) {
+    const found = findServer(nested, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+// A short, safe description of whatever the listing returned, so a shape
+// change is readable from the report instead of guesswork. Only primitives
+// are kept: the raw listing can hold values that do not serialize.
 function describe(value, depth = 0) {
   if (Array.isArray(value)) {
-    return {
-      kind: "array",
-      length: value.length,
-      names: value.map((item) => item?.name ?? item?.id ?? null).filter(Boolean).slice(0, 12),
-    };
+    return { kind: "array", length: value.length };
   }
   if (!value || typeof value !== "object" || depth > 2) return { kind: typeof value };
   const described = { kind: "object", keys: Object.keys(value).slice(0, 8) };
   for (const key of ["data", "items", "servers", "results", "list", "page"]) {
-    if (value[key] !== undefined) {
-      described[key] = describe(value[key], depth + 1);
-    }
+    const nested = value[key];
+    if (nested === undefined) continue;
+    if (Array.isArray(nested)) described[key] = { kind: "array", length: nested.length };
+    else if (nested && typeof nested === "object") described[key] = describe(nested, depth + 1);
+    else described[key] = typeof nested;
   }
   return described;
 }
@@ -123,20 +140,29 @@ async function setupV2(ctx) {
     // The transform is already applied; a failed reload is not fatal.
   }
 
+  // The server is spawned when it is registered: the first model request can
+  // arrive before it is up, and then the tools would be missing. Wait for it
+  // to show up in the listing.
   let status = "unknown";
   let error = null;
   let mcpList = null;
-  try {
-    const raw = await ctx.mcp.list();
-    const servers = serverList(raw);
-    const entry = servers.find((server) => server?.name === SERVER_NAME);
+  let entry = null;
+  const deadline = Date.now() + 15000;
+  do {
+    try {
+      const raw = await ctx.mcp.list();
+      mcpList = describe(raw);
+      entry = findServer(raw);
+      if (entry) break;
+    } catch (error_) {
+      error = String(error_?.message ?? error_);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  } while (Date.now() < deadline);
+
+  if (entry) {
     status = serverStatus(entry);
     error = entry?.status?.error ?? null;
-    // What the listing looked like, so a future shape change is readable from
-    // the report instead of guessing.
-    mcpList = describe(raw);
-  } catch (error_) {
-    error = String(error_?.message ?? error_);
   }
   // `ok` stays false until a session proves the tools reached the model: the
   // server being up is not the same as the tools being exposed.
@@ -147,14 +173,19 @@ async function setupV2(ctx) {
   // is up. Recorded once, on the first request.
   if (typeof ctx.session?.hook === "function") {
     let recorded = false;
+    let lastCount = -1;
     try {
       await ctx.session.hook("context", async (input) => {
-        if (recorded || !input || typeof input.tools !== "object") return;
+        if (!input || typeof input.tools !== "object") return;
         const all = Object.keys(input.tools);
         // The host can name the MCP tools with a prefix ("context-mode_ctx_..."),
         // so the match is not anchored at the start.
         const names = all.filter((name) => /ctx/i.test(name));
+        // The tool list can grow while the server connects: the report always
+        // carries the latest one.
+        if (recorded && names.length === lastCount) return;
         recorded = true;
+        lastCount = names.length;
         writeReport({
           ...readReport(),
           ok: names.length > 0,
