@@ -100,17 +100,26 @@ async function setupV2(ctx) {
 
   let status = "unknown";
   let error = null;
+  let mcpList = null;
   try {
-    const servers = serverList(await ctx.mcp.list());
+    const raw = await ctx.mcp.list();
+    const servers = serverList(raw);
     const entry = servers.find((server) => server?.name === SERVER_NAME);
     status = serverStatus(entry);
     error = entry?.status?.error ?? null;
+    // What the listing looked like, so a future shape change is readable from
+    // the report instead of guessing.
+    mcpList = {
+      kind: Array.isArray(raw) ? "array" : typeof raw,
+      keys: raw && typeof raw === "object" && !Array.isArray(raw) ? Object.keys(raw).slice(0, 8) : [],
+      names: servers.map((server) => server?.name).filter(Boolean).slice(0, 12),
+    };
   } catch (error_) {
     error = String(error_?.message ?? error_);
   }
   // `ok` stays false until a session proves the tools reached the model: the
   // server being up is not the same as the tools being exposed.
-  writeReport({ route: "mcp", ok: false, status, error });
+  writeReport({ route: "mcp", ok: false, status, error, mcpList });
 
   // The session context carries the tools the model actually receives: that
   // is the proof that the `ctx_*` tools are exposed, not only that the server
@@ -120,10 +129,13 @@ async function setupV2(ctx) {
     try {
       await ctx.session.hook("context", async (input) => {
         if (recorded || !input || typeof input.tools !== "object") return;
-        const names = Object.keys(input.tools).filter((name) => name.startsWith("ctx_"));
+        const all = Object.keys(input.tools);
+        // The host can name the MCP tools with a prefix ("context-mode_ctx_..."),
+        // so the match is not anchored at the start.
+        const names = all.filter((name) => /ctx/i.test(name));
         if (names.length === 0) return;
         recorded = true;
-        writeReport({ ...readReport(), ok: true, tools: names.sort() });
+        writeReport({ ...readReport(), ok: true, tools: names.sort(), totalTools: all.length });
       });
     } catch (error) {
       // A diagnostic hook must never break a request.
