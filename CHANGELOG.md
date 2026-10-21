@@ -4,6 +4,17 @@ Todas las novedades de Habitat se registran acá, siguiendo
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [0.3.1] - 2026-10-21
+
+### Documentacion
+
+- Los diagramas se regeneraron con Archify 3.2.0. El de arquitectura seguia escrito para la
+  linea 1.x: decia "seis comprobaciones" (hoy son diez) y no mostraba ni el check
+  `opencode-cli` ni la adaptacion por linea del CLI. Ahora suma el nodo del CLI ("OpenCode 1.x
+  o 2.x"), sus relaciones con el entorno vivo y con la verificacion, y la tarjeta "Lineas de
+  OpenCode" (plugin nativo en 1.x, servidor MCP en 2.x, y los hooks de routing que quedan
+  fuera hasta que upstream los publique).
+
 ## [0.3.0] - 2026-10-21
 
 Compatibilidad con la línea 2.x de OpenCode: el payload se adapta a las dos líneas y la
@@ -269,6 +280,7 @@ interno.
 git clone https://github.com/FacundoECornet/Habitat.git ~/code/habitat
 ```
 
+[0.3.1]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.3.1
 [0.3.0]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.3.0
 [0.2.1]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.2.1
 [0.2.0]: https://github.com/FacundoECornet/Habitat/releases/tag/v0.2.0
