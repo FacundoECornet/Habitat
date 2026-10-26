@@ -4,6 +4,28 @@ Todas las novedades de Habitat se registran acá, siguiendo
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [Unreleased]
+
+### Arreglado
+
+- **El check `model-ids` ya no rompe la instalación por un id autenticado invisible.**
+  `opencode models` puede anunciar el namespace `opencode-go/*` y aun así omitir ids
+  concretos cuando el CLI cae a su snapshot empaquetado: pasó en macOS con OpenCode 1.19.3 y
+  `opencode-go/longcat-2.5-preview-free`, que hacía fallar el install con código 1. Esa
+  ausencia no prueba retiro, así que ahora queda como *sin verificar*; los ids del namespace
+  público siguen fallando y el job semanal del catálogo es el que emite el veredicto de
+  retiro.
+- **Los cuatro agentes `gsd-doc-*` usan `opencode-go/longcat-2.0`** en los perfiles
+  easy/medium/hard, en `~/.gsd/router.json` y en la configuración de planificación:
+  `longcat-2.5-preview-free` no aparecía en el catálogo del CLI que corre la CI.
+- **El gate de auditoría vuelve a verde sin bajar el nivel.** `home/.config/opencode`
+  declara `overrides` para `zod 4.6.7` y `toml 5.0.1`: `@opencode-ai/plugin` pina
+  `zod 4.1.8` y `effect` arrastra `toml 4.x`, ambos con advisories high
+  (GHSA-mrhx-c7xc-m3w5, GHSA-4qx8-w7c3-pj3p, GHSA-9j65-hcg3-gc64, GHSA-9qmh-m7c6-f92p).
+  `npm audit --audit-level=high` queda en 0 vulnerabilidades. El único uso de `toml` en
+  `effect` es `Toml.parse`, que existe igual en 5.0.1; la instalación y la verificación
+  siguen pasando.
+
 ## [0.3.1] - 2026-10-21
 
 ### Documentacion

@@ -82,6 +82,13 @@ público es un subconjunto que todavía anuncia modelos que OpenCode ya retiró:
 marcar un ID como inválido con ese listado rompería la instalación de todo el
 mundo sin motivo.
 
+Aun con el namespace autenticado presente, el CLI puede caer a su snapshot
+empaquetado y omitir IDs nuevos de `opencode-go/*` (pasó con
+`opencode-go/longcat-2.5-preview-free` en macOS con OpenCode 1.19.3). Esa
+ausencia no prueba retiro: el check la reporta como **sin verificar** y solo
+falla con IDs del namespace público. El veredicto duro de retiro lo emite el
+job semanal.
+
 Fuera de la instalación hay un segundo control, `tools/check-model-ids.mjs`:
 compara el payload contra el catálogo y, con el catálogo completo, sale con
 código 1 y lista dónde aparece cada ID retirado. Es lo que corre el job

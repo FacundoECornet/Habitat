@@ -134,7 +134,7 @@ node tools/verify.mjs
 | `opencode-cli` | Qué línea de OpenCode estás usando y por qué ruta llega context-mode; falla si no llega por ninguna. |
 | `discovery` | Skills y agentes son descubribles y no están duplicados. |
 | `archify` | La skill de Archify viene completa y su doctor responde. |
-| `model-ids` | Cada modelo configurado existe en el catálogo de OpenCode. |
+| `model-ids` | Cada modelo configurado existe en el catálogo de OpenCode. Un id autenticado que el CLI no lista queda en `skip`, no en fallo. |
 
 Un check en `skip` no hace fallar la instalación; un check que falla siempre trae un hint
 accionable.

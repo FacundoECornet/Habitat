@@ -23,6 +23,7 @@ const NS_AUTH = "opencode-go";
 const VALID_PUBLIC = [NS_PUBLIC, "modelo-valido"].join("/");
 const VALID_AUTH = [NS_AUTH, "modelo-valido"].join("/");
 const RETIRED_PUBLIC = [NS_PUBLIC, "modelo-retirado"].join("/");
+const MISSING_AUTH = [NS_AUTH, "modelo-ausente"].join("/");
 
 // Un catalogo publico completo: 25 modelos del namespace `opencode`.
 const FULL_PUBLIC_CATALOG = Array.from({ length: 25 }, (_, i) => `${NS_PUBLIC}/modelo-${i}`);
@@ -110,6 +111,21 @@ test("model-ids: sin el namespace autenticado no se emite veredicto", (t) => {
 test("model-ids: un id del namespace autenticado no falla si el namespace no aparece", (t) => {
   const home = makeHome(t, { "gsd-code-reviewer": VALID_AUTH });
   const stub = stubOpencode(t, { models: [...FULL_PUBLIC_CATALOG, VALID_PUBLIC] });
+
+  const check = runVerify(home, stub);
+  assert.equal(check.ok, true, `no debe fallar: ${check.detail}`);
+  assert.equal(check.skipped, true, "queda como no verificado, no como error");
+});
+
+// Un catalogo que anuncia el namespace autenticado puede seguir omitiendo un
+// id concreto: el CLI cae a su snapshot empaquetado y lista los ids viejos pero
+// no los nuevos. Esa ausencia no prueba retiro, asi que la instalacion no puede
+// fallar; el job semanal del catalogo es el que emite ese veredicto.
+test("model-ids: un id autenticado ausente no falla aunque el catalogo parezca completo", (t) => {
+  const home = makeHome(t, { "gsd-doc-writer": MISSING_AUTH });
+  const stub = stubOpencode(t, {
+    models: [...FULL_PUBLIC_CATALOG, VALID_PUBLIC, AUTH_MARKER],
+  });
 
   const check = runVerify(home, stub);
   assert.equal(check.ok, true, `no debe fallar: ${check.detail}`);

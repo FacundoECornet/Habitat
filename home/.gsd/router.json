@@ -4,7 +4,7 @@
     "gsd-executor": "opencode-go/deepseek-v4.1-flash",
     "gsd-verifier": "opencode-go/mimo-v2.6-pro",
     "gsd-codebase-mapper": "opencode/mimo-v2.6-flash-free",
-    "gsd-doc-writer": "opencode-go/longcat-2.5-preview-free",
+    "gsd-doc-writer": "opencode-go/longcat-2.0",
     "gsd-phase-researcher": "opencode/muse-spark-1.3",
     "gsd-project-researcher": "opencode/muse-spark-1.3",
     "gsd-research-synthesizer": "opencode/muse-spark-1.3",

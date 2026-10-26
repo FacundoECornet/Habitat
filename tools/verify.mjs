@@ -33,6 +33,11 @@ const EXIT_USAGE = 2;
 // registry was truncated by missing credentials, not that the ids are invalid.
 const MIN_FULL_CATALOG = 20;
 
+// Models behind this namespace need credentials and are not always listed, even
+// when the rest of the namespace is: a CLI that falls back to its bundled
+// registry snapshot shows the older ids and omits the newer ones.
+const AUTH_NAMESPACE = "opencode-go";
+
 function parseArgs(argv) {
   const args = argv.slice(2);
   const options = {
@@ -629,7 +634,7 @@ function checkModels(home, repo) {
   // filtered subset (the free models) that still advertises models OpenCode
   // already retired. A missing id in an incomplete catalog is not evidence of
   // a retired model, so it is reported as unchecked instead of a failure.
-  const hasAuthNamespace = [...known].some((id) => id.startsWith("opencode-go/"));
+  const hasAuthNamespace = [...known].some((id) => id.startsWith(`${AUTH_NAMESPACE}/`));
   const namespaces = new Set([...known].map((id) => id.split("/")[0]));
   const limited = !hasAuthNamespace || known.size < MIN_FULL_CATALOG;
 
@@ -642,7 +647,12 @@ function checkModels(home, repo) {
       if (known.has(model)) continue;
       const namespace = model.includes("/") ? model.split("/")[0] : null;
       const invisible = namespace !== null && !namespaces.has(namespace);
-      if (limited || invisible) unverified.push(`${profile}:${agent}=${model}`);
+      // Even a "complete" catalog can hide some auth-gated ids: older CLIs fall
+      // back to a bundled snapshot that lists the namespace but not its newest
+      // entries. Absence there is not proof of retirement, so only public ids
+      // fail the install-time check; the weekly catalog job owns the verdict.
+      const authGated = namespace === AUTH_NAMESPACE;
+      if (limited || invisible || authGated) unverified.push(`${profile}:${agent}=${model}`);
       else problems.push(`${profile}:${agent}=${model}`);
     }
   }
@@ -659,8 +669,8 @@ function checkModels(home, repo) {
   if (unverified.length > 0) {
     skip(
       "model-ids",
-      `${checked - unverified.length}/${checked} ids válidos; ${unverified.length} sin verificar (catálogo limitado)`,
-      "autenticá opencode (`opencode auth login`) para validar el catálogo completo",
+      `${checked - unverified.length}/${checked} ids válidos; ${unverified.length} sin verificar (catálogo incompleto o id autenticado invisible)`,
+      "autenticá opencode (`opencode auth login`) para validar el catálogo completo; el job semanal del catálogo detecta los ids retirados",
     );
     return;
   }
