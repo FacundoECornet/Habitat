@@ -106,6 +106,8 @@ Después de instalar, cerrá y volvé a abrir OpenCode para cargar el MCP global
   `~/.config/opencode`; `verify` falla con un hint si un plugin lo importa y el SDK no está.
 - Para ver dónde se va el tiempo: `HABITAT_TIMING=1 node tools/install.mjs`. Imprime una línea
   por proceso con el total y sus fases (`copy`, `npm ci`, `plugins`, `verify`).
+- Sin credencial OpenCode Zen, `verify` no consulta `opencode models`: el catálogo público no
+  permite validar los ids autenticados, así que el check queda en `skip` sin gastar la llamada.
 
 ## OpenCode 1.x y 2.x
 
@@ -147,7 +149,7 @@ node tools/verify.mjs
 | `discovery` | Skills y agentes son descubribles y no están duplicados. |
 | `archify` | La skill de Archify viene completa y su doctor responde. |
 | `npm-audit` | Audita dependencias de producción (`--audit-level=high`) una vez por cambio del lock; después queda cacheado por fingerprint. |
-| `model-ids` | Cada modelo configurado existe en el catálogo de OpenCode. Un id autenticado que el CLI no lista queda en `skip`, no en fallo. |
+| `model-ids` | Cada modelo configurado existe en el catálogo de OpenCode. Sin credencial OpenCode Zen no consulta el catálogo (queda en `skip`); con credencial, un id autenticado que el CLI no lista queda en `skip`, no en fallo. |
 
 Un check en `skip` no hace fallar la instalación; un check que falla siempre trae un hint
 accionable.

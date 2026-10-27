@@ -74,7 +74,7 @@ solo si todas pasan:
 | `discovery` | Skills y agentes son descubribles y no están duplicados entre roots. |
 | `archify` | La skill de Archify viene completa y su doctor responde. |
 | `npm-audit` | Audita producción con `--audit-level=high` una vez por cambio del lock; después usa un fingerprint. |
-| `model-ids` | Cada modelo configurado existe en el catálogo de OpenCode. (`--no-models` lo omite) |
+| `model-ids` | Cada modelo configurado existe en el catálogo de OpenCode. Sin credencial Zen no consulta el CLI y queda en `skip`; con credencial valida contra el catálogo completo. (`--no-models` lo omite) |
 
 Un check puede quedar en `skip` (no se puede evaluar en esta máquina: falta la
 CLI, falta una credencial) y eso **no** hace fallar el run. Un check que falla
@@ -82,7 +82,9 @@ siempre viene con un hint accionable.
 
 `model-ids` solo puede declarar un ID inválido cuando el catálogo está
 **completo**, y el catálogo está completo cuando trae el namespace autenticado
-(`opencode-go/*`), que solo aparece con credencial. Sin credencial, el listado
+(`opencode-go/*`), que solo aparece con credencial. Sin credencial, ni siquiera
+consulta `opencode models`: no hay veredicto posible y el check queda en `skip`.
+Con credencial, el listado
 público es un subconjunto que todavía anuncia modelos que OpenCode ya retiró:
 marcar un ID como inválido con ese listado rompería la instalación de todo el
 mundo sin motivo.

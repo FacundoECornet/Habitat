@@ -45,39 +45,64 @@ function makeHome(t, overrides) {
   return home;
 }
 
-// Stub del CLI `opencode`: imprime el catalogo o falla, segun el caso.
-function stubOpencode(t, { models, fail = false }) {
+// Stub del CLI `opencode`: imprime el catalogo o falla, segun el caso. Con
+// `marker` deja una senal cuando el CLI fue invocado, para probar que el check
+// sin credencial no gasta la llamada.
+function stubOpencode(t, { models, fail = false, marker = null }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "habitat-stub-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const touch = marker
+    ? process.platform === "win32"
+      ? `> "${marker}" echo called\r\n`
+      : `printf called > "${marker}"\n`
+    : "";
   if (process.platform === "win32") {
     const file = path.join(dir, "opencode.cmd");
     const body = fail
-      ? "@echo off\r\nexit /b 1\r\n"
-      : `@echo off\r\n${models.map((m) => `echo ${m}`).join("\r\n")}\r\n`;
+      ? `@echo off\r\n${touch}exit /b 1\r\n`
+      : `@echo off\r\n${touch}${models.map((m) => `echo ${m}`).join("\r\n")}\r\n`;
     fs.writeFileSync(file, body);
   } else {
     const file = path.join(dir, "opencode");
     const body = fail
-      ? "#!/usr/bin/env bash\nexit 1\n"
-      : `#!/usr/bin/env bash\ncat <<'CATALOG'\n${models.join("\n")}\nCATALOG\n`;
+      ? `#!/usr/bin/env bash\n${touch}exit 1\n`
+      : `#!/usr/bin/env bash\n${touch}cat <<'CATALOG'\n${models.join("\n")}\nCATALOG\n`;
     fs.writeFileSync(file, body);
     fs.chmodSync(file, 0o755);
   }
   return dir;
 }
 
-function runVerify(home, stubDir) {
+function runVerify(home, stubDir, { apiKey = "test-key" } = {}) {
+  const env = { ...process.env, PATH: `${stubDir}${path.delimiter}${process.env.PATH ?? ""}` };
+  if (apiKey) env.OPENCODE_API_KEY = apiKey;
+  else delete env.OPENCODE_API_KEY;
   const result = spawnSync(
     process.execPath,
     [verifyTool, "--home", home, "--repo", root, "--no-cli", "--json"],
-    {
-      encoding: "utf8",
-      env: { ...process.env, PATH: `${stubDir}${path.delimiter}${process.env.PATH ?? ""}` },
-    },
+    { encoding: "utf8", env },
   );
   const payload = JSON.parse(result.stdout);
   return payload.checks.find((entry) => entry.name === "model-ids");
 }
+
+// Sin credencial no hay catalogo completo ni veredicto posible: el check no
+// debe gastar una llamada de red que siempre termina en skip.
+test("model-ids: sin credencial no invoca el CLI", (t) => {
+  const marker = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "habitat-marker-")), "called");
+  t.after(() => fs.rmSync(path.dirname(marker), { recursive: true, force: true }));
+  const home = makeHome(t, { "gsd-codebase-mapper": RETIRED_PUBLIC });
+  const stub = stubOpencode(t, {
+    models: [...FULL_PUBLIC_CATALOG, VALID_PUBLIC],
+    marker,
+  });
+
+  const check = runVerify(home, stub, { apiKey: null });
+  assert.equal(check.ok, true, check.detail);
+  assert.equal(check.skipped, true);
+  assert.match(check.detail, /sin credencial/);
+  assert.equal(fs.existsSync(marker), false, "no debe ejecutar opencode models");
+});
 
 // Un ID publico que ya no esta en el catalogo es un problema real: la
 // instalacion de los usuarios fallaria.

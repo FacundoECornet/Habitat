@@ -20,6 +20,10 @@ Todas las novedades de Habitat se registran acá, siguiendo
   importa el SDK que ya no se instala por defecto.
 - **Instrumentación opt-in:** `HABITAT_TIMING=1` imprime fases y total de `install`, `restore` y
   `verify`.
+- **Install frío más rápido sin credencial:** `model-ids` ya no ejecuta `opencode models` cuando
+  no hay credencial OpenCode Zen. Ese catálogo filtrado nunca podía emitir un fallo (siempre
+  terminaba en `skip`), así que se evita la llamada de red: el install frío medido baja de
+  ~18 s a ~7-9 s, sin perder ninguna validación real.
 
 ### Arreglado
 

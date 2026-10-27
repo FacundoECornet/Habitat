@@ -772,6 +772,26 @@ function checkModels(home, repo) {
     return;
   }
 
+  // Without an OpenCode Zen credential the catalog is filtered and can never
+  // produce a failure verdict: every missing id is unverified, not retired.
+  // Skip the CLI call (11 s on a cold network) instead of paying for a check
+  // that inevitably ends in `skip`. With credentials the full check runs.
+  let apiKey;
+  try {
+    apiKey = openCodeZenApiKey({ home });
+  } catch (error) {
+    check("model-ids", false, error.message, "revisá el perfil de autenticación de OpenCode");
+    return;
+  }
+  if (!apiKey) {
+    skip(
+      "model-ids",
+      "sin credencial OpenCode Zen — no se consulta el catálogo; perfiles locales válidos",
+      "autenticá opencode (`opencode auth login`) para validar el catálogo completo; `--no-models` omite el check",
+    );
+    return;
+  }
+
   // Check only effective home models; repository defaults are fallback inputs,
   // not extra model selections when the user has customized their overlay.
   const available = runToolRetry("opencode", ["models"], 30000, 3);
