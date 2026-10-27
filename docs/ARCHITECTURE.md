@@ -19,7 +19,7 @@ flowchart LR
     end
     subgraph DST[Máquina destino]
         ENG[restore.mjs<br/>backup + copia + npm ci]
-        VER[verify.mjs<br/>10 comprobaciones]
+        VER[verify.mjs<br/>12 comprobaciones]
         NEW[Entorno vivo]
     end
     LIVE --> CAP --> PAYLOAD
@@ -33,7 +33,10 @@ flowchart LR
   destino. Nada fuera del manifiesto se captura.
 - **home/** es el espejo versionado del entorno de origen.
 - **restore.mjs** (Node, multiplataforma) es el motor: hace backup de lo que va a
-  pisar, copia el payload, ejecuta los post-steps (`npm ci`) y es idempotente.
+  pisar, copia el payload, ejecuta los post-steps (`npm ci --omit=dev`) y es idempotente.
+- **context-mode** es una dependencia de producción del payload, no un global: el
+  instalador agrega `~/.config/opencode/node_modules/.bin` al `PATH` para que el
+  MCP lo resuelva.
 - **verify.mjs** comprueba que el entorno restaurado quedó funcional.
 
 ## 2. Qué se restaura y a dónde
@@ -55,7 +58,7 @@ El destino nunca se borra: lo que va a ser pisado se copia antes a
 
 ## 3. Verificación
 
-`node tools/verify.mjs` corre diez comprobaciones y devuelve código de salida 0
+`node tools/verify.mjs` corre doce comprobaciones y devuelve código de salida 0
 solo si todas pasan:
 
 | Check | Qué garantiza |
@@ -65,10 +68,12 @@ solo si todas pasan:
 | `mcp-json` | La config de MCP parsea y cada servidor está declarado como local. |
 | `jev-mcp` | El MCP de JEV responde — o queda en `skip` si no hay credencial de OpenCode Zen. |
 | `cli-tools` | `gsd-sdk` y `graphify` responden; si no están instalados, se informa en verde. (`--no-cli` lo omite) |
-| `plugins` | Cada plugin declarado (local o npm) resuelve. |
+| `plugins` | Cada plugin declarado resuelve desde `~/.config/opencode/node_modules`. |
+| `plugin-sdk` | Ningún plugin del usuario importa `@opencode-ai/plugin` sin el SDK instalado (devDependency). |
 | `opencode-cli` | Qué línea de OpenCode se está usando y por qué vía llega context-mode; falla si no llega por ninguna. |
 | `discovery` | Skills y agentes son descubribles y no están duplicados entre roots. |
 | `archify` | La skill de Archify viene completa y su doctor responde. |
+| `npm-audit` | Audita producción con `--audit-level=high` una vez por cambio del lock; después usa un fingerprint. |
 | `model-ids` | Cada modelo configurado existe en el catálogo de OpenCode. (`--no-models` lo omite) |
 
 Un check puede quedar en `skip` (no se puede evaluar en esta máquina: falta la

@@ -96,6 +96,17 @@ Después de instalar, cerrá y volvé a abrir OpenCode para cargar el MCP global
 > `checker`): cada modelo se aplica a todos los sub-agentes de ese rol. `Enter` mantiene,
 > `!` vuelve al default del repo y `q` termina.
 
+### Qué instala (y qué no)
+
+- `context-mode` se instala **local** en `~/.config/opencode/node_modules` como dependencia de
+  producción: no se escribe en el npm global de tu usuario. El instalador agrega ese `.bin` al
+  `PATH` (POSIX) o al `PATH` de usuario (Windows).
+- El SDK `@opencode-ai/plugin` queda como **devDependency**: no se instala de fábrica porque
+  nada del runtime lo importa. Si escribís plugins y querés sus tipos, corré `npm i` dentro de
+  `~/.config/opencode`; `verify` falla con un hint si un plugin lo importa y el SDK no está.
+- Para ver dónde se va el tiempo: `HABITAT_TIMING=1 node tools/install.mjs`. Imprime una línea
+  por proceso con el total y sus fases (`copy`, `npm ci`, `plugins`, `verify`).
+
 ## OpenCode 1.x y 2.x
 
 Las dos líneas de OpenCode están soportadas, y no se comportan igual.
@@ -130,10 +141,12 @@ node tools/verify.mjs
 | `mcp-json` | La config de MCP parsea y cada servidor está declarado como local. |
 | `jev-mcp` | El MCP de JEV responde — o queda en `skip` si no hay credencial de OpenCode Zen. |
 | `cli-tools` | `gsd-sdk` y `graphify` responden; si no están instalados, se informa en verde. |
-| `plugins` | Cada plugin declarado (local o npm) resuelve. |
+| `plugins` | Cada plugin declarado resuelve desde `~/.config/opencode/node_modules`. |
+| `plugin-sdk` | Ningún plugin del usuario importa `@opencode-ai/plugin` sin tener el SDK instalado; si pasa, falla con el hint `npm i`. |
 | `opencode-cli` | Qué línea de OpenCode estás usando y por qué ruta llega context-mode; falla si no llega por ninguna. |
 | `discovery` | Skills y agentes son descubribles y no están duplicados. |
 | `archify` | La skill de Archify viene completa y su doctor responde. |
+| `npm-audit` | Audita dependencias de producción (`--audit-level=high`) una vez por cambio del lock; después queda cacheado por fingerprint. |
 | `model-ids` | Cada modelo configurado existe en el catálogo de OpenCode. Un id autenticado que el CLI no lista queda en `skip`, no en fallo. |
 
 Un check en `skip` no hace fallar la instalación; un check que falla siempre trae un hint
@@ -204,6 +217,8 @@ Graphify es opcional y requiere Python 3. Sin Python, el resto de Habitat sigue 
 | PowerShell bloquea `npm.ps1` | Usá `npm.cmd` en vez de `npm` (`npm.cmd test`). |
 | `verify` falla en `model-ids` | `opencode auth login` y volvé a correr `node tools/verify.mjs`. |
 | `verify` falla en `opencode-cli` | El CLI no está en el PATH, o context-mode no quedó declarado por ninguna vía. `node tools/install.mjs` lo adapta a la línea 1.x o 2.x que tengas. |
+| `verify` falla en `plugin-sdk` | Un plugin importa `@opencode-ai/plugin`, que ahora es devDependency. Corré `npm i` en `~/.config/opencode` para recuperar el SDK. |
+| `verify` falla en `npm-audit` | Revisá la salida: hay una vulnerabilidad high/critical en una dependencia de producción del payload. Actualizá el paquete y regenerá el lock. |
 | El MCP `jev` no levanta | Confirmá `OpenCode Zen` con `opencode.cmd auth list` (Windows) o `opencode auth list` (Linux/macOS) y reconectá. Diagnóstico: `opencode --print-logs --log-level DEBUG mcp list`. |
 | `jev` no aplica perfil | `gsd-route easy|medium|hard` para elegir perfil manualmente. |
 | `graphify` no está disponible | Instalá Python 3 y volvé a correr `node tools/install.mjs --with-deps`. |

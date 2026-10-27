@@ -15,14 +15,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { PROFILE_NAMES, loadOverlay, mergeOverlay } from "../lib/model-pick.mjs";
 import { openCodeZenApiKey } from "../lib/opencode-auth.mjs";
 import { findExecutable } from "../lib/exec-path.mjs";
+import { createTimer } from "../lib/timing.mjs";
 
 const require = createRequire(import.meta.url);
+const timing = createTimer("verify");
+process.on("exit", () => timing.finish());
 
 const EXIT_OK = 0;
 const EXIT_FAILED = 1;
@@ -402,7 +406,7 @@ function resolveExecutable(command) {
   return findExecutable(command);
 }
 
-function runTool(command, args, timeoutMs) {
+function runTool(command, args, timeoutMs, cwd) {
   const win = process.platform === "win32";
   const resolved = resolveExecutable(command);
   // A missing binary must surface as ENOENT even on win32, where the spawn
@@ -419,6 +423,7 @@ function runTool(command, args, timeoutMs) {
   const result = spawnSync(win ? `"${resolved}"` : resolved, args, {
     encoding: "utf8",
     timeout: timeoutMs,
+    cwd,
     env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
     shell: win,
@@ -478,7 +483,6 @@ function checkPlugins(home) {
   let local = 0;
   let npm = 0;
   const seen = new Set();
-  const globalRoot = npmGlobalRoot();
   for (const configPath of configCandidates) {
     if (!fs.existsSync(configPath)) continue;
     let parsed;
@@ -496,7 +500,7 @@ function checkPlugins(home) {
         if (!fs.existsSync(path.resolve(base, plugin))) problems.push(plugin);
       } else {
         npm += 1;
-        if (!resolveNpmPlugin(plugin, base, globalRoot)) missingNpm.push(plugin);
+        if (!resolveNpmPlugin(plugin, base)) missingNpm.push(plugin);
       }
     }
   }
@@ -508,28 +512,179 @@ function checkPlugins(home) {
       ? `${seen.size} plugins declarados (${local} locales, ${npm} npm)`
       : `no resuelven: ${failures.join(", ")}`,
     missingNpm.length > 0
-      ? `instalá el paquete npm faltante (npm i -g ${missingNpm.join(" ")}@<versión>) o corré node tools/install.mjs`
+      ? "corré `npm ci` en ~/.config/opencode o node tools/install.mjs (context-mode es dependency del payload)"
       : "un plugin local no existe: corré scripts/restore.sh y npm ci",
   );
 }
 
-function npmGlobalRoot() {
-  const result = runTool("npm", ["root", "-g"], 20000);
-  if (result.error || result.status !== 0) return null;
-  const root = (result.stdout ?? "").trim().split("\n").filter(Boolean).pop();
-  return root ? root.trim() : null;
-}
-
-// A bare plugin name is an npm package. opencode resolves it from the config
-// directory's node_modules or from the global npm root, so either location
-// counts as installed.
-function resolveNpmPlugin(name, base, globalRoot) {
+// Bare plugin names are npm packages installed in the config directory's
+// node_modules (context-mode is a production dependency of the payload). The
+// global npm root is deliberately not consulted: the installer never mutates
+// the user's global packages anymore.
+function resolveNpmPlugin(name, base) {
   try {
     require.resolve(name, { paths: [base] });
     return true;
   } catch {
-    return globalRoot ? fs.existsSync(path.join(globalRoot, name, "package.json")) : false;
+    return false;
   }
+}
+
+// C1 guard: @opencode-ai/plugin is a devDependency now, so it is not installed
+// by `npm ci --omit=dev`. A user plugin that imports it at runtime must be
+// caught here with an actionable hint instead of failing later inside opencode.
+const PLUGIN_SDK_RE = /@opencode-ai\/plugin\b/;
+const PLUGIN_FILE_RE = /\.(?:[cm]?[jt]s|[jt]sx)$/i;
+
+function collectPluginFiles(home) {
+  const configDir = path.join(home, ".config", "opencode");
+  const files = new Set();
+  const addTree = (root) => {
+    if (!fs.existsSync(root)) return;
+    const stack = [root];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      let entries;
+      try {
+        entries = fs.readdirSync(current, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+        const full = path.join(current, entry.name);
+        if (entry.isDirectory()) stack.push(full);
+        else if (entry.isFile() && PLUGIN_FILE_RE.test(entry.name)) files.add(full);
+      }
+    }
+  };
+  addTree(path.join(configDir, "plugins"));
+  for (const configPath of [
+    path.join(configDir, "opencode.json"),
+    path.join(configDir, "opencode.jsonc"),
+  ]) {
+    if (!fs.existsSync(configPath)) continue;
+    let parsed;
+    try {
+      parsed = readJsonish(configPath);
+    } catch {
+      continue;
+    }
+    for (const plugin of parsed.plugin ?? []) {
+      if (typeof plugin !== "string" || !plugin.startsWith(".")) continue;
+      const resolved = path.resolve(configDir, plugin);
+      let stat;
+      try {
+        stat = fs.statSync(resolved);
+      } catch {
+        continue;
+      }
+      if (stat.isDirectory()) addTree(resolved);
+      else if (stat.isFile() && PLUGIN_FILE_RE.test(resolved)) files.add(resolved);
+    }
+  }
+  return [...files];
+}
+
+function sdkInstalled(configDir) {
+  try {
+    require.resolve("@opencode-ai/plugin", { paths: [configDir] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function checkPluginSdk(home) {
+  const configDir = path.join(home, ".config", "opencode");
+  const hits = [];
+  const files = collectPluginFiles(home);
+  for (const file of files) {
+    let text;
+    try {
+      text = fs.readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    PLUGIN_SDK_RE.lastIndex = 0;
+    if (PLUGIN_SDK_RE.test(text)) hits.push(path.relative(configDir, file));
+  }
+  const installed = hits.length === 0 || sdkInstalled(configDir);
+  check(
+    "plugin-sdk",
+    installed,
+    hits.length === 0
+      ? `${files.length} plugins sin imports de @opencode-ai/plugin`
+      : installed
+        ? `${hits.length} plugins importan el SDK y está instalado`
+        : `plugins importan el SDK (devDependency, no instalado): ${hits.join(", ")}`,
+    installed ? "" : "corré `npm i` en ~/.config/opencode para recuperar el SDK de tipos de plugins",
+  );
+}
+
+// npm audit runs explicitly here because restore uses --no-audit (it was noise
+// nobody read). The digest marker makes it run once per lock change, so the
+// warm path costs nothing while a changed lock gets a visible verdict.
+function npmInputsDigest(configDir) {
+  const pkg = path.join(configDir, "package.json");
+  const lock = path.join(configDir, "package-lock.json");
+  if (!fs.existsSync(pkg) || !fs.existsSync(lock)) return null;
+  const hash = crypto.createHash("sha256");
+  for (const file of [pkg, lock]) {
+    try {
+      hash.update(fs.readFileSync(file));
+    } catch {
+      return null;
+    }
+  }
+  return hash.digest("hex");
+}
+
+function checkNpmAudit(home) {
+  const configDir = path.join(home, ".config", "opencode");
+  const digest = npmInputsDigest(configDir);
+  if (!digest) {
+    skip(
+      "npm-audit",
+      "sin package.json/package-lock.json en el config dir",
+      "restaurá el payload antes de auditar dependencias",
+    );
+    return;
+  }
+  const marker = path.join(configDir, "node_modules", ".habitat-audit-fingerprint");
+  let previous = "";
+  try {
+    previous = fs.readFileSync(marker, "utf8").trim();
+  } catch {
+    previous = "";
+  }
+  if (previous === digest) {
+    check("npm-audit", true, "sin cambios desde la última auditoría");
+    return;
+  }
+  const result = runTool("npm", ["audit", "--omit=dev", "--audit-level=high"], 120000, configDir);
+  if (result.error) {
+    skip("npm-audit", `no se pudo ejecutar npm audit: ${result.error.message}`, "instalá Node.js/npm y reintentá");
+    return;
+  }
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+  if (result.status !== 0) {
+    const summary = output.split(/\r?\n/).filter(Boolean).slice(-6).join("; ");
+    check(
+      "npm-audit",
+      false,
+      `npm audit falló (exit ${result.status}): ${summary || "sin salida"}`,
+      "revisá las vulnerabilidades de alta severidad y actualizá las dependencias del payload",
+    );
+    return;
+  }
+  try {
+    fs.mkdirSync(path.dirname(marker), { recursive: true });
+    fs.writeFileSync(marker, digest);
+  } catch {
+    /* marker is best-effort: a read-only node_modules still passes the check */
+  }
+  check("npm-audit", true, "sin vulnerabilidades high/critical en dependencias de producción");
 }
 
 function checkDiscovery(home) {
@@ -680,18 +835,20 @@ function checkModels(home, repo) {
 function main() {
   const options = parseArgs(process.argv);
 
-  checkManifest(options.repo, options.home);
-  checkPortablePaths(options.home);
-  checkMcp(options.home, options.repo);
-  checkJevMcp(options.home);
+  timing.wrap("manifest-dests", () => checkManifest(options.repo, options.home));
+  timing.wrap("portable-paths", () => checkPortablePaths(options.home));
+  timing.wrap("mcp-json", () => checkMcp(options.home, options.repo));
+  timing.wrap("jev-mcp", () => checkJevMcp(options.home));
   if (!options.noCli) {
-    checkCli();
-    checkOpencodeCli(options.home);
+    timing.wrap("cli-tools", () => checkCli());
+    timing.wrap("opencode-cli", () => checkOpencodeCli(options.home));
   }
-  checkPlugins(options.home);
-  checkDiscovery(options.home);
-  checkArchify(options.home);
-  if (!options.noModels) checkModels(options.home, options.repo);
+  timing.wrap("plugins", () => checkPlugins(options.home));
+  timing.wrap("plugin-sdk", () => checkPluginSdk(options.home));
+  timing.wrap("discovery", () => checkDiscovery(options.home));
+  timing.wrap("archify", () => checkArchify(options.home));
+  timing.wrap("npm-audit", () => checkNpmAudit(options.home));
+  if (!options.noModels) timing.wrap("model-ids", () => checkModels(options.home, options.repo));
 
   const failed = results.filter((r) => !r.ok);
 

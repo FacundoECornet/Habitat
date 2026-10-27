@@ -30,9 +30,12 @@ import { fileURLToPath } from "node:url";
 import { loadValidatedManifest, ManifestError } from "../lib/manifest.mjs";
 import { materialize } from "../lib/home-placeholder.mjs";
 import { isCertificateError, withSystemCaAnyPlatform } from "../lib/opencode-auth.mjs";
+import { createTimer } from "../lib/timing.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
+const timing = createTimer("restore");
+process.on("exit", () => timing.finish());
 
 function err(msg) { process.stderr.write(msg + "\n"); }
 function out(msg) { process.stdout.write(msg + "\n"); }
@@ -652,7 +655,29 @@ function whichBin(name) {
 }
 
 // --- fixed post-step dispatch: `npm ci` only, never eval (RST-04) -----------
+// Production-only install: the plugin SDK is a devDependency and is not needed
+// to run the restored payload. Audit is off here because verify.mjs runs it
+// explicitly (and visibly) once per lock change.
+const NPM_CI_FLAGS = [
+  "--omit=dev",
+  "--no-audit",
+  "--no-fund",
+  "--prefer-offline",
+  "--loglevel=error",
+  "--ignore-scripts",
+];
+const NPM_REBUILD_ARGS = ["rebuild", "better-sqlite3", "--no-audit", "--no-fund"];
+
 function npmGate(destDir, dest) {
+  timing.begin("npm ci");
+  try {
+    npmGateBody(destDir, dest);
+  } finally {
+    timing.end("npm ci");
+  }
+}
+
+function npmGateBody(destDir, dest) {
   const pkg = path.join(destDir, "package.json");
   const lock = npmLockPath(destDir);
   const nm = path.join(destDir, "node_modules");
@@ -677,27 +702,46 @@ function npmGate(destDir, dest) {
   // with spaces; with an args array + shell, spawnSync concatenates unquoted and
   // cmd.exe splits at the first space ("C:\Program" not found). Quote the spaces.
   const win = process.platform === "win32";
-  const runCi = (env) => {
+  const runNpm = (args, env) => {
     const r = win
-      ? spawnSync(`"${npm}" ci`, { cwd: destDir, encoding: "utf8", env, shell: true })
-      : spawnSync(npm, ["ci"], { cwd: destDir, encoding: "utf8", env, shell: false });
+      ? spawnSync(`"${npm}" ${args.join(" ")}`, { cwd: destDir, encoding: "utf8", env, shell: true })
+      : spawnSync(npm, args, { cwd: destDir, encoding: "utf8", env, shell: false });
     const output = [r.stdout, r.stderr].filter(Boolean).join("\n");
     if (output.trim()) process.stdout.write(output);
     return { status: r.status, output };
   };
-
-  let attempt = runCi(process.env);
-  let certificateFailure = false;
-  if (attempt.status !== 0 && isCertificateError(attempt.output)) {
-    certificateFailure = true;
-    // Corporate TLS interception: retry once against the system CA store.
-    const retryEnv = withSystemCaAnyPlatform(process.env);
-    if (retryEnv !== process.env) {
-      out("npm ci: fallo de certificado; reintento con el almacén de CA del sistema");
-      attempt = runCi(retryEnv);
+  const runWithRetry = (args, label) => {
+    let attempt = runNpm(args, process.env);
+    let certificateFailure = false;
+    if (attempt.status !== 0 && isCertificateError(attempt.output)) {
+      certificateFailure = true;
+      // Corporate TLS interception: retry once against the system CA store.
+      const retryEnv = withSystemCaAnyPlatform(process.env);
+      if (retryEnv !== process.env) {
+        out(`${label}: fallo de certificado; reintento con el almacén de CA del sistema`);
+        attempt = runNpm(args, retryEnv);
+      }
     }
-  }
+    return { attempt, certificateFailure };
+  };
+
+  const { attempt, certificateFailure } = runWithRetry(["ci", ...NPM_CI_FLAGS], "npm ci");
   if (attempt.status === 0) {
+    // --ignore-scripts skips context-mode's postinstall, which would run
+    // `npm install` inside its own package directory and duplicate the whole
+    // tree. The only production lifecycle script the payload needs is
+    // better-sqlite3's native build, so run that one explicitly.
+    let rebuild = { status: 0 };
+    if (fs.existsSync(path.join(nm, "better-sqlite3"))) {
+      rebuild = runWithRetry(NPM_REBUILD_ARGS, "npm rebuild").attempt;
+    }
+    if (rebuild.status !== 0) {
+      recordFailure(
+        "restore: npm-rebuild-failed (" + dest + ") — better-sqlite3 no compiló; " +
+          "revisá la salida de npm rebuild y los prebuilds de better-sqlite3",
+      );
+      return;
+    }
     try { fs.mkdirSync(nm, { recursive: true }); } catch { /* ignore */ }
     try { fs.writeFileSync(marker, npmDigest(pkg, lock)); } catch { /* ignore */ }
     out("npm ci: installed (" + dest + ")");
@@ -755,10 +799,15 @@ function processEntry(idx) {
     dryPostSteps(dst, dest, entry.postSteps);
   } else {
     let entryFailed = false;
-    if (type === "file") {
-      if (!entryFileReal(src, dst)) entryFailed = true;
-    } else {
-      if (!entryDirReal(src, dst, entry.excludes)) entryFailed = true;
+    timing.begin("copy");
+    try {
+      if (type === "file") {
+        if (!entryFileReal(src, dst)) entryFailed = true;
+      } else {
+        if (!entryDirReal(src, dst, entry.excludes)) entryFailed = true;
+      }
+    } finally {
+      timing.end("copy");
     }
     if (!entryFailed) {
       if (ENT_ADDED === 0 && ENT_CHANGED === 0) out("up-to-date, skipped " + ENT_SKIPPED + " files");

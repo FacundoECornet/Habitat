@@ -42,6 +42,10 @@ test("the installer adds ~/bin to PATH without touching the rest of .bashrc", (t
   const after = fs.readFileSync(rc, "utf8");
   assert.ok(after.startsWith(original), "no debe reescribir el .bashrc del usuario");
   assert.ok(after.includes('export PATH="$HOME/bin:$PATH"'), "debe agregar ~/bin al PATH");
+  assert.ok(
+    after.includes('export PATH="$HOME/.config/opencode/node_modules/.bin:$PATH"'),
+    "debe agregar el .bin local de context-mode al PATH",
+  );
   assert.equal(after.match(/Added by Habitat/g).length, 1, "un solo bloque");
 
   const second = install(home);

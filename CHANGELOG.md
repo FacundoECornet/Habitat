@@ -6,6 +6,21 @@ Todas las novedades de Habitat se registran acá, siguiendo
 
 ## [Unreleased]
 
+### Cambiado
+
+- **Instalación más rápida sin cambiar de runtime ni de package manager.** El SDK de plugins
+  (`@opencode-ai/plugin`) pasó a `devDependencies` y `npm ci` ahora corre con `--omit=dev`,
+  `--no-audit`, `--no-fund`, `--prefer-offline` y `--loglevel=error`. `context-mode` dejó de
+  instalarse globalmente: es una dependencia de producción del payload y se instala en el mismo
+  `npm ci` local. El instalador agrega `~/.config/opencode/node_modules/.bin` al `PATH` y ya no
+  escribe en el npm global del usuario.
+- **`verify` recupera la visibilidad de seguridad:** nuevo check `npm-audit` que corre
+  `npm audit --omit=dev --audit-level=high` una vez por cambio del lock (después lo cachea por
+  fingerprint). Nuevo check `plugin-sdk` que falla con el hint `npm i` si un plugin del usuario
+  importa el SDK que ya no se instala por defecto.
+- **Instrumentación opt-in:** `HABITAT_TIMING=1` imprime fases y total de `install`, `restore` y
+  `verify`.
+
 ### Arreglado
 
 - **El check `model-ids` ya no rompe la instalación por un id autenticado invisible.**

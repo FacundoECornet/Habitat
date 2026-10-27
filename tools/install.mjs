@@ -26,8 +26,11 @@ import { planBin, cmdShim } from "../lib/bins.mjs";
 import { mergeOverlay, readModelFile, readProfiles, repoPointerPath } from "../lib/model-pick.mjs";
 import { canonicalHome, expandHome } from "../lib/home-placeholder.mjs";
 import { isCertificateError, openCodeZenApiKey, withSystemCaAnyPlatform } from "../lib/opencode-auth.mjs";
+import { createTimer } from "../lib/timing.mjs";
 
 const require = createRequire(import.meta.url);
+const timing = createTimer("install");
+process.on("exit", () => timing.finish());
 
 const EXIT_OK = 0;
 const EXIT_FAILED = 1;
@@ -36,7 +39,6 @@ const IS_WIN = process.platform === "win32";
 
 const DEPS = {
   gsd: "get-shit-done-cc@1.42.3",
-  contextMode: "context-mode@1.0.169",
   graphify: "graphifyy==0.9.14",
 };
 
@@ -773,45 +775,32 @@ function installDeps(options) {
   return true;
 }
 
-function npmGlobalRoot() {
-  const result = run("npm", ["root", "-g"], { capture: true });
-  if (result.status !== 0) return null;
-  const root = (result.stdout ?? "").trim().split("\n").filter(Boolean).pop();
-  return root ? root.trim() : null;
-}
-
 // opencode loads a bare plugin name as an npm package from the config dir's
-// node_modules or from the global npm root.
+// node_modules. context-mode is a production dependency of the payload, so the
+// same `npm ci` that installs JEV installs it too (no global mutation).
 function pluginResolved(name, home) {
   const configDir = path.join(home, ".config", "opencode");
   try {
     require.resolve(name, { paths: [configDir] });
     return true;
   } catch {
-    const globalRoot = npmGlobalRoot();
-    return globalRoot ? fs.existsSync(path.join(globalRoot, name, "package.json")) : false;
+    return false;
   }
 }
 
-// context-mode is declared as an npm plugin in opencode.jsonc; without it the
-// plugin silently fails to load. It is ensured on every run (not only
-// --with-deps) but the failure is non-fatal: restore still completes and
-// tools/verify.mjs reports the missing plugin by name.
+// Non-fatal: restore still completes and tools/verify.mjs reports the missing
+// plugin by name. With the local dependency this is only missing when the user
+// skipped the restore (or npm ci failed, which restore already reported).
 function ensurePlugins(options) {
   if (pluginResolved("context-mode", options.home)) {
-    log("plugins", "context-mode ya resoluble (local o global)");
+    log("plugins", "context-mode resuelve desde el config dir");
     return true;
   }
-  log("plugins", `instalando ${DEPS.contextMode}`);
-  const spin = spinner(`npm install -g ${DEPS.contextMode}`);
-  const result = runWithCertRetry("npm", ["install", "-g", DEPS.contextMode], { capture: true });
-  spin.stop(result.status === 0);
-  if (result.status !== 0) {
-    fail(`${DEPS.contextMode} no se pudo instalar (npm falló)${errorDetail(result)}; verify lo reportará`);
-    return false;
-  }
-  log("plugins", "context-mode instalado globalmente");
-  return true;
+  warn(
+    "context-mode no resuelve desde ~/.config/opencode/node_modules; " +
+      "corré `npm ci` en ese directorio o node tools/install.mjs sin --skip-restore",
+  );
+  return false;
 }
 
 function extractAnchors(text) {
@@ -975,34 +964,54 @@ function copyBin(options) {
 // personal and machine-bound. The only thing Habitat needs from it is the
 // ~/bin entry in PATH, so the installer writes that single guarded block
 // (POSIX) or updates the user PATH (Windows) instead.
+const LOCAL_BIN_REL = path.join(".config", "opencode", "node_modules", ".bin");
 const PATH_BLOCK = [
   "",
   "# Added by Habitat: tools installed in ~/bin (gsd-route, gsd-model-pick, ...)",
   'if [ -d "$HOME/bin" ]; then',
   '    export PATH="$HOME/bin:$PATH"',
   "fi",
+  "# context-mode comes from ~/.config/opencode/node_modules.",
+  'if [ -d "$HOME/.config/opencode/node_modules/.bin" ]; then',
+  '    export PATH="$HOME/.config/opencode/node_modules/.bin:$PATH"',
+  "fi",
   "",
 ].join("\n");
 
+function prependPath(dir) {
+  const entries = (process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  if (!entries.includes(dir)) process.env.PATH = [dir, ...entries].join(path.delimiter);
+}
+
 function ensureBinOnPath(options) {
   const binDir = path.join(options.home, "bin");
+  const localBin = path.join(options.home, LOCAL_BIN_REL);
   if (options.dryRun) {
-    log("path", `dry-run: se agregaría ${binDir} al PATH`);
+    log("path", `dry-run: se agregarían ${binDir} y ${localBin} al PATH`);
     return true;
   }
+  prependPath(binDir);
+  prependPath(localBin);
   if (IS_WIN) {
+    const entries = [binDir, localBin];
     const script = [
       "$p=[Environment]::GetEnvironmentVariable('Path','User')",
-      "if (($p -split ';') -notcontains '" + binDir.replace(/'/g, "''") + "') {",
-      "  [Environment]::SetEnvironmentVariable('Path', ($p + ';" + binDir.replace(/'/g, "''") + "'), 'User')",
-      "}",
+      ...entries.map(
+        (entry) =>
+          "if (($p -split ';') -notcontains '" +
+          entry.replace(/'/g, "''") +
+          "') { $p = $p + ';" +
+          entry.replace(/'/g, "''") +
+          "' }",
+      ),
+      "[Environment]::SetEnvironmentVariable('Path', $p, 'User')",
     ].join("; ");
     const result = run("powershell", ["-NoProfile", "-Command", script], { capture: true });
     if (result.status !== 0) {
       warn(`no se pudo agregar ${binDir} al PATH de usuario: agregalo a mano`);
       return true;
     }
-    log("path", `${binDir} agregado al PATH de usuario; reabri la terminal para que tome efecto`);
+    log("path", `${binDir} y ${localBin} agregados al PATH de usuario; reabri la terminal para que tome efecto`);
     return true;
   }
 
@@ -1016,13 +1025,25 @@ function ensureBinOnPath(options) {
       return true;
     }
   }
-  if (current.includes("Added by Habitat: tools installed in ~/bin")) {
-    log("path", `${binDir} ya está en el PATH`);
+  const hasHomeBin = current.includes('export PATH="$HOME/bin:$PATH"');
+  const hasLocalBin = current.includes('export PATH="$HOME/.config/opencode/node_modules/.bin:$PATH"');
+  if (hasHomeBin && hasLocalBin) {
+    log("path", `${binDir} y ${localBin} ya están en el PATH`);
     return true;
   }
+  const block = hasHomeBin
+    ? [
+        "",
+        "# context-mode comes from ~/.config/opencode/node_modules.",
+        'if [ -d "$HOME/.config/opencode/node_modules/.bin" ]; then',
+        '    export PATH="$HOME/.config/opencode/node_modules/.bin:$PATH"',
+        "fi",
+        "",
+      ].join("\n")
+    : PATH_BLOCK;
   try {
-    fs.appendFileSync(rc, PATH_BLOCK, "utf8");
-    log("path", `${binDir} agregado al PATH en ${rc}; reabri la terminal para que tome efecto`);
+    fs.appendFileSync(rc, block, "utf8");
+    log("path", `${binDir} y ${localBin} agregados al PATH en ${rc}; reabri la terminal para que tome efecto`);
   } catch (error) {
     warn(`no se pudo agregar ${binDir} al PATH (${error.message}): agregalo a mano`);
   }
@@ -1162,7 +1183,7 @@ function main() {
 
   if (options.withDeps) {
     if (options.dryRun) log("deps", "dry-run: se instalarían " + JSON.stringify(DEPS));
-    else if (!installDeps(options)) process.exit(EXIT_FAILED);
+    else if (!timing.wrap("deps", () => installDeps(options))) process.exit(EXIT_FAILED);
   } else {
     log("deps", "omitido (usar --with-deps para get-shit-done-cc y graphifyy)");
   }
@@ -1172,9 +1193,11 @@ function main() {
       log("gsd", "dry-run: se correría el instalador GSD y se re-aplicarían los parches");
     } else {
       log("gsd", "ejecutando instalador GSD (puede tardar)");
-      const install = runWithCertRetry("npx", ["-y", "get-shit-done-cc@1.42.3", "--opencode", "--global"], {
-        cwd: options.repo,
-      });
+      const install = timing.wrap("gsd", () =>
+        runWithCertRetry("npx", ["-y", "get-shit-done-cc@1.42.3", "--opencode", "--global"], {
+          cwd: options.repo,
+        }),
+      );
       if (install.status !== 0) {
         fail("el instalador de get-shit-done-cc falló; no se parchea");
         process.exit(EXIT_FAILED);
@@ -1185,28 +1208,36 @@ function main() {
     if (!patchedGsdStep(options)) process.exit(EXIT_FAILED);
   }
 
-  if (!copyBin(options)) process.exit(EXIT_FAILED);
-  if (!copySupportModules(options)) process.exit(EXIT_FAILED);
-  if (!ensureBinOnPath(options)) process.exit(EXIT_FAILED);
-
-  if (options.skipPlugins) log("plugins", "omitido (--skip-plugins)");
-  else if (options.dryRun) log("plugins", "dry-run: se verificaría/instalaría context-mode");
-  else ensurePlugins(options);
+  timing.begin("copy");
+  const copied =
+    copyBin(options) && copySupportModules(options) && ensureBinOnPath(options);
+  timing.end("copy");
+  if (!copied) process.exit(EXIT_FAILED);
 
   if (options.skipRestore) {
     log("restore", "omitido (--skip-restore)");
     warn("--skip-restore deja el home sin restaurar; tools/verify.mjs va a fallar por destinos faltantes");
-  } else if (!options.dryRun && !restoreManifest(options)) {
+  } else if (!options.dryRun && !timing.wrap("restore", () => restoreManifest(options))) {
     process.exit(EXIT_FAILED);
   }
 
-  if (!options.dryRun && !rememberRepo(options)) process.exit(EXIT_FAILED);
+  // context-mode is a local dependency of the payload: check it only after the
+  // restore ran `npm ci`, otherwise the node_modules it lives in does not exist.
+  if (options.skipPlugins) log("plugins", "omitido (--skip-plugins)");
+  else if (options.dryRun) log("plugins", "dry-run: se verificaría context-mode en el config dir");
+  else ensurePlugins(options);
 
-  if (!options.dryRun) activateRepoHooks(options);
-
-  if (!options.dryRun && !adaptContextModeToCli(options)) process.exit(EXIT_FAILED);
-
-  if (!options.dryRun && !disableJevWithoutCredential(options)) process.exit(EXIT_FAILED);
+  if (!options.dryRun) {
+    timing.begin("config");
+    try {
+      if (!rememberRepo(options)) process.exit(EXIT_FAILED);
+      activateRepoHooks(options);
+      if (!adaptContextModeToCli(options)) process.exit(EXIT_FAILED);
+      if (!disableJevWithoutCredential(options)) process.exit(EXIT_FAILED);
+    } finally {
+      timing.end("config");
+    }
+  }
 
   if (options.skipVerify) {
     log("verify", "omitido");
@@ -1217,7 +1248,7 @@ function main() {
     log("verify", "dry-run: se ejecutaría tools/verify.mjs");
     process.exit(EXIT_OK);
   }
-  const ok = verify(options);
+  const ok = timing.wrap("verify", () => verify(options));
   if (ok) {
     successBanner(options);
     process.exit(EXIT_OK);

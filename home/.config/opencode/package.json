@@ -1,6 +1,9 @@
 {
   "dependencies": {
     "@jkudish/jev-mcp": "0.14.5",
+    "context-mode": "1.0.169"
+  },
+  "devDependencies": {
     "@opencode-ai/plugin": "1.19.4"
   },
   "overrides": {
