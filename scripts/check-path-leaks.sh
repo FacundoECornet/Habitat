@@ -191,7 +191,7 @@ if [ "$MODE" = "tree" ]; then
     [ -n "$p" ] || continue
     rel="${p#"$ROOT"/}"
     [ "$rel" = "$p" ] && rel="$p"
-    if content="$(cat -- "$p" 2>/dev/null)"; then
+    if content="$(cat -- "$p" 2>/dev/null | LC_ALL=C tr -d '\000')"; then
       seen_lines="$NL"
       scan_content "$rel" "$content"
     else
@@ -271,7 +271,7 @@ scan_path() {
   # MUST succeed. A failed indexed-blob read is a scan failure, never a silent
   # skip. Untracked candidates have no index blob and are read from the worktree.
   if git -C "$ROOT" ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
-    if idx="$(git -C "$ROOT" show ":$path" 2>/dev/null)"; then
+    if idx="$(git -C "$ROOT" show ":$path" 2>/dev/null | LC_ALL=C tr -d '\000')"; then
       scan_content "$path" "$idx"
     else
       report 'scan-failed' "$path" '?'
@@ -281,7 +281,7 @@ scan_path() {
   # tracked-modified / untracked worktree file (never a symlink)
   full="$ROOT/$path"
   if [ -f "$full" ] && [ ! -L "$full" ]; then
-    if content="$(cat -- "$full" 2>/dev/null)"; then
+    if content="$(cat -- "$full" 2>/dev/null | LC_ALL=C tr -d '\000')"; then
       scan_content "$path" "$content"
     else
       report 'scan-failed' "$path" '?'

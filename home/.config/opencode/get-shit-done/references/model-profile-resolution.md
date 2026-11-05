@@ -68,4 +68,4 @@ profile is left authoritative and the global router is not touched.
 
 - `tools/gsd-jevs-route.mjs` — JEV classification + provider fallback (exit 2 = no change)
 - `tools/route.mjs` — atomic config writer
-- `tests/router-flow.mjs` — mocked end-to-end flow
+- `tests/gsd-jevs-route.test.mjs` — mocked end-to-end flow
