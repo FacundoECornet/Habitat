@@ -27,6 +27,16 @@ Todas las novedades de Habitat se registran acá, siguiendo
 
 ### Arreglado
 
+- **Cero vulnerabilidades en ambos árboles de dependencias.** `@hono/node-server`
+  `>=1.19.10 <2.1.3` tenía el advisory moderado GHSA-rmxm-3fg6-px4f (`serveStatic`
+  decodifica la ruta dos veces y omite el middleware de un prefijo estático), sin parche en
+  la línea 1.x. Se actualizó `@jkudish/jev-mcp` a 0.14.7, que resuelve
+  `@modelcontextprotocol/node@2.1.2` (rango `^1.19.9 || ^2.1.3`) y deja una única copia de
+  `@hono/node-server@2.1.6`, satisfecha también por `@modelcontextprotocol/sdk`. Además se
+  quitó de la raíz la devDependency `@jkudish/jev-mcp` 0.14.3: estaba muerta (tests y
+  `verify` resuelven el paquete desde `home/.config/opencode`) y era la que arrastraba el
+  `@hono/node-server` vulnerable en el lockfile raíz. `npm audit` queda en 0 en la raíz y en
+  el payload.
 - **El check `model-ids` ya no rompe la instalación por un id autenticado invisible.**
   `opencode models` puede anunciar el namespace `opencode-go/*` y aun así omitir ids
   concretos cuando el CLI cae a su snapshot empaquetado: pasó en macOS con OpenCode 1.19.3 y

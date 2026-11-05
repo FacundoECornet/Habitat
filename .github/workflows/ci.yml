@@ -250,12 +250,19 @@ jobs:
           export HOME="$RUNNER_TEMP/habitat-home"
           export XDG_DATA_HOME="$RUNNER_TEMP/habitat-data"
           if [ "${{ matrix.source }}" = "npm" ]; then
-            # The native plugin registers its tools when the CLI loads: the
-            # agent config lists them.
-            count="$(opencode debug agent build | grep -c 'ctx_' || true)"
-            echo "herramientas ctx_* declaradas: $count"
-            if [ "$count" -lt 11 ]; then
-              echo "::error::la línea 1.x debería exponer las 11 herramientas ctx_* (encontradas: $count)"
+            # OpenCode resolves the native plugin from its own cache
+            # (`context-mode@latest`), not from the payload pin, so the exact
+            # tool set can drift with upstream releases. Assert the stable
+            # core tools instead of a fixed count: a missing tool means the
+            # plugin did not load or lost a documented capability.
+            build="$(opencode debug agent build)"
+            missing=""
+            for tool in ctx_execute ctx_index ctx_search ctx_stats ctx_doctor ctx_upgrade ctx_purge; do
+              printf '%s' "$build" | grep -q "\"$tool\"" || missing="$missing $tool"
+            done
+            printf '%s' "$build" | grep -qE '"ctx_batch(_execute)?"' || missing="$missing ctx_batch"
+            if [ -n "$missing" ]; then
+              echo "::error::la línea 1.x no expone las herramientas ctx_* esperadas:$missing"
               exit 1
             fi
             echo "ok: las herramientas ctx_* están expuestas"
@@ -266,7 +273,7 @@ jobs:
             echo "$listing" | head -30
             # El listado muestra servidor y estado (no los nombres de las
             # herramientas): lo que prueba es que el servidor MCP de
-            # context-modeLevanta y conecta en la línea 2.x.
+            # context-mode levanta y conecta en la línea 2.x.
             if ! printf '%s' "$listing" | grep -iE 'context-mode.*connected' >/dev/null; then
               echo "::error::en la línea 2.x el servidor MCP de context-mode no está conectado:"
               echo "$listing"
