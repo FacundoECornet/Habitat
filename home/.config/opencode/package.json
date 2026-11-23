@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@jkudish/jev-mcp": "0.14.7",
+    "@jkudish/jev-mcp": "0.15.0",
     "context-mode": "1.0.169"
   },
   "devDependencies": {
